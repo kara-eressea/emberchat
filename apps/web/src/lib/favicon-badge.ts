@@ -6,7 +6,7 @@
 // silence alerts (decisions.md §10). Sidebar badges and tint are unchanged
 // and keep accruing for muted conversations.
 
-import { PREFS_DEFAULTS } from "@emberchat/protocol";
+import { PREFS_DEFAULTS, UNREAD_DISPLAY_CAP } from "@emberchat/protocol";
 import type { IdentitySession, IdentitySummary } from "../stores/sessions.js";
 
 export interface UnreadIndicator {
@@ -135,7 +135,10 @@ function draw(indicator: UnreadIndicator): void {
   // smaller one: at a 16px favicon a bare disc the width of the numbered
   // badge reads as "the number failed to render", while 0.22 still carries
   // a clear pixel or two of red.
-  const label = indicator.count > 99 ? "99+" : String(indicator.count);
+  const label =
+    indicator.count > UNREAD_DISPLAY_CAP
+      ? `${String(UNREAD_DISPLAY_CAP)}+`
+      : String(indicator.count);
   const radius =
     CANVAS_SIZE *
     (indicator.count === 0 ? 0.22 : label.length > 2 ? 0.34 : 0.3);

@@ -539,6 +539,22 @@ export interface SocialDto {
   outgoing: { id: number; name: string }[];
 }
 
+/**
+ * The largest unread/mention count that is an exact number on the wire (#582).
+ *
+ * Counting every unread row in a busy channel is work nobody reads: the server
+ * stops at one past this and reports the total it found, so any value ABOVE
+ * this means "at least this many" rather than a precise figure. Badges render
+ * that as `99+` — see `clampBadge` in the web app, which is the only place the
+ * saturated value is allowed to mean something to a person.
+ *
+ * Both sides derive from this one constant on purpose: the server's scan
+ * window is `UNREAD_DISPLAY_CAP + 1` and the badge's "is it saturated?" test is
+ * `> UNREAD_DISPLAY_CAP`. Moving the number in one place alone is exactly how
+ * a badge that can never say `99+` happens.
+ */
+export const UNREAD_DISPLAY_CAP = 99;
+
 export interface SnapshotChannel {
   convId: string;
   key: string;
@@ -555,11 +571,12 @@ export interface SnapshotChannel {
   seen: SeenMemberDto[];
   joined: boolean;
   pinned: boolean;
+  /** Saturates above UNREAD_DISPLAY_CAP — see that constant. */
   unread: number;
   /** Unread inbound messages matching the identity's character name (word
    * boundary, case-insensitive; M5 highlight rules extend this). Counted
-   * within the same capped window as `unread`. DMs carry no mention count —
-   * every DM is already directed at the user. */
+   * within the same capped window as `unread`, and saturating the same way.
+   * DMs carry no mention count — every DM is already directed at the user. */
   mentions: number;
   lastReadMessageId: number | null;
 }
@@ -572,6 +589,7 @@ export interface SnapshotDm {
   status: string;
   statusmsg: string;
   pinned: boolean;
+  /** Saturates above UNREAD_DISPLAY_CAP — see that constant. */
   unread: number;
   lastReadMessageId: number | null;
   /**
@@ -777,17 +795,18 @@ export type ServerFrame =
            * reconnects every autoConnect identity on the account. */
           autoConnect: boolean;
           /** Badge totals across the identity's conversations, so the rail
-           * paints before (or without) a sub. Sums of the same capped
-           * per-conversation windows the snapshot counts — a signal, not an
-           * exact figure; the client clamps display at 99+. Kept live
-           * client-side by aggregating subscribed slices; these are the
-           * initial values. */
+           * paints before (or without) a sub. Sums of the same saturating
+           * per-conversation windows the snapshot counts (UNREAD_DISPLAY_CAP)
+           * — a signal, not an exact figure; the client clamps display at
+           * 99+. Kept live client-side by aggregating subscribed slices;
+           * these are the initial values. */
           unread: number;
           mentions: number;
           /** Notification-inbox rows past the identity's seen watermark,
            * muted ones excluded (#467) — so the bell badges on a cold load
-           * without waiting for a sub or an inbox fetch. Capped like the
-           * badge totals; the client clamps display. */
+           * without waiting for a sub or an inbox fetch. Saturates like the
+           * badge totals, at the same UNREAD_DISPLAY_CAP; the client clamps
+           * display. */
           notificationsUnseen: number;
         }[];
       };

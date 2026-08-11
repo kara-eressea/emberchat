@@ -4,7 +4,7 @@
 // a nick is never in both rosters.
 
 import { beforeEach, describe, expect, it } from "vitest";
-import { PREFS_DEFAULTS } from "@emberchat/protocol";
+import { PREFS_DEFAULTS, UNREAD_DISPLAY_CAP } from "@emberchat/protocol";
 import type { ConversationDto, MemberDto } from "@emberchat/protocol";
 import {
   genderOf,
@@ -284,6 +284,44 @@ function channelConversation(
     lastReadMessageId,
   };
 }
+
+describe("live unread saturation (#582)", () => {
+  // A client that stays attached through a flood counts every message itself.
+  // Left unbounded it would climb past the point the server's own counts stop
+  // at, so the same conversation reported one number live and a different one
+  // after a reattach. Both now mean "at least this many".
+  it("holds a channel's live counters at the wire's saturation point", () => {
+    const store = useSessionsStore.getState();
+    store.applyConversation(IDENTITY, channelConversation(null));
+    for (let i = 1; i <= UNREAD_DISPLAY_CAP + 25; i += 1) {
+      store.bumpUnread(IDENTITY, CONV, 100 + i, true);
+    }
+    const channel = channelState();
+    expect(channel?.unread).toBe(UNREAD_DISPLAY_CAP + 1);
+    expect(channel?.mentions).toBe(UNREAD_DISPLAY_CAP + 1);
+    // Still the newest id, which the read-ack guard (#264) depends on.
+    expect(channel?.newestMessageId).toBe(100 + UNREAD_DISPLAY_CAP + 25);
+  });
+
+  it("holds a DM's live counter at the same point", () => {
+    const store = useSessionsStore.getState();
+    store.applyConversation(IDENTITY, pmConversation("Nyx Firemane"));
+    for (let i = 1; i <= UNREAD_DISPLAY_CAP + 25; i += 1) {
+      store.bumpUnread(IDENTITY, CONV, 200 + i);
+    }
+    const dm = useSessionsStore.getState().sessions[IDENTITY]?.dms[CONV];
+    expect(dm?.unread).toBe(UNREAD_DISPLAY_CAP + 1);
+  });
+
+  it("leaves counts below the cap exact", () => {
+    const store = useSessionsStore.getState();
+    store.applyConversation(IDENTITY, channelConversation(null));
+    for (let i = 1; i <= 5; i += 1) {
+      store.bumpUnread(IDENTITY, CONV, 100 + i);
+    }
+    expect(channelState()?.unread).toBe(5);
+  });
+});
 
 describe("read-ack echo vs. live unread (#264)", () => {
   it("keeps unread when a slow ack echo lands below a newer live message", () => {

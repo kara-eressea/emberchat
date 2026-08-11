@@ -26,6 +26,7 @@ import {
   GATEWAY_CLOSE,
   PREFS_DEFAULTS,
   PROTOCOL_VERSION,
+  UNREAD_DISPLAY_CAP,
   type ClientFrame,
   type NotificationDto,
   type ResumeCursors,
@@ -1356,7 +1357,9 @@ describe("gateway fan-out", () => {
     );
     await app.history.flush();
 
-    // A conversation with more unread than the cap: counting stops at 99.
+    // A conversation with more unread than the cap: counting stops one past
+    // the largest number a badge shows exactly, so the client can tell
+    // "saturated" from "exactly 99" and render "99+" (#582).
     const [flooded] = await db
       .insert(conversations)
       .values({
@@ -1406,7 +1409,13 @@ describe("gateway fan-out", () => {
     expect(channel.description).not.toBe("");
 
     const capped = snapshot.d.channels.find((c) => c.key === "Flooded")!;
-    expect(capped).toMatchObject({ unread: 99, mentions: 0 });
+    // Strictly above the cap is the whole point: a count that stopped AT it is
+    // indistinguishable from a channel holding exactly that many, and the
+    // badge renders a flat "99" forever. The client half of this contract is
+    // asserted in the web app's badges.test.ts.
+    expect(capped.unread).toBe(UNREAD_DISPLAY_CAP + 1);
+    expect(capped.unread).toBeGreaterThan(UNREAD_DISPLAY_CAP);
+    expect(capped.mentions).toBe(0);
   });
 
   it("highlight rules match at persist time and badge a detached identity", async () => {

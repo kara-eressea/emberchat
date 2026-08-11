@@ -9,15 +9,21 @@
 // is a log — they simply never alert (decisions.md §10).
 
 import { create } from "zustand";
-import type { NotificationDto } from "@emberchat/protocol";
+import { UNREAD_DISPLAY_CAP, type NotificationDto } from "@emberchat/protocol";
 import { api } from "../lib/api.js";
 
 /** Rows kept per identity; older ones re-load through the API. */
 export const INBOX_WINDOW = 200;
 /** Rows per API page. */
 export const INBOX_PAGE_SIZE = 50;
-/** Display ceiling for the bell badge (rendered "99+" past it). */
-export const UNSEEN_DISPLAY_CAP = 99;
+/**
+ * Display ceiling for the bell badge (rendered "99+" past it). The same number
+ * the conversation badges use, and deliberately the same definition: the
+ * server's unseen count saturates one past it, so a bell that tested against
+ * its own private constant could drift out of step with the wire and lose its
+ * "+" the way the channel badge did (#582).
+ */
+export const UNSEEN_DISPLAY_CAP = UNREAD_DISPLAY_CAP;
 
 /** What became of a friend request this client acted on (#505). */
 export type FriendRequestVerdict = "accepted" | "declined";

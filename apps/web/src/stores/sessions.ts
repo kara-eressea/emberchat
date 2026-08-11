@@ -6,7 +6,7 @@
 // add/remove, never a counter increment keyed to event arrival.
 
 import { create } from "zustand";
-import { PREFS_DEFAULTS } from "@emberchat/protocol";
+import { PREFS_DEFAULTS, UNREAD_DISPLAY_CAP } from "@emberchat/protocol";
 import { genderColorVar } from "../theme/tokens.js";
 import type {
   CampaignDto,
@@ -536,6 +536,18 @@ function bulkRow(
  * roster casing leaves ghost members and unpopulated seen rosters (#265). */
 export function sameCharacter(a: string, b: string): boolean {
   return a.toLowerCase() === b.toLowerCase();
+}
+
+/**
+ * Hold a live badge counter at the wire's own saturation point (#582).
+ *
+ * The server's snapshot counts stop one past UNREAD_DISPLAY_CAP; a client that
+ * stayed attached through the same traffic would otherwise climb past that and
+ * disagree with its own next snapshot. Both now mean "at least this many", and
+ * `clampBadge` renders either as "99+".
+ */
+function saturate(count: number): number {
+  return Math.min(count, UNREAD_DISPLAY_CAP + 1);
 }
 
 /**
@@ -1217,6 +1229,11 @@ export const useSessionsStore = create<SessionsState>()((set, get) => {
         // registers — not a guard we can add here, since the target row does
         // not exist. Deferred deliberately; captured so it is not rediscovered
         // as a new bug.
+        //
+        // Live bumps saturate exactly where the server's counts do (#582), so
+        // a long-attached session and a fresh snapshot of the same
+        // conversation report the same number rather than drifting apart —
+        // both mean "at least this many" past the cap.
         const key = session.channelByConvId[convId];
         if (key !== undefined && session.channels[key]) {
           const channel = session.channels[key];
@@ -1226,8 +1243,8 @@ export const useSessionsStore = create<SessionsState>()((set, get) => {
               ...session.channels,
               [key]: {
                 ...channel,
-                unread: channel.unread + 1,
-                mentions: channel.mentions + (mention ? 1 : 0),
+                unread: saturate(channel.unread + 1),
+                mentions: saturate(channel.mentions + (mention ? 1 : 0)),
                 // Track the newest live id so a later read-ack echo below it
                 // cannot wipe this still-unread message (#264).
                 newestMessageId: Math.max(
@@ -1246,7 +1263,7 @@ export const useSessionsStore = create<SessionsState>()((set, get) => {
               ...session.dms,
               [convId]: {
                 ...dm,
-                unread: dm.unread + 1,
+                unread: saturate(dm.unread + 1),
                 newestMessageId: Math.max(dm.newestMessageId ?? 0, messageId),
               },
             },

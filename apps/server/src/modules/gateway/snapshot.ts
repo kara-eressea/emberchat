@@ -4,11 +4,12 @@
 // cursors read straight from the messages table — it *is* the resume log.
 
 import { and, asc, desc, eq, getTableColumns, gt, lt, sql } from "drizzle-orm";
-import type {
-  MemberDto,
-  MessageDto,
-  SnapshotChannel,
-  SnapshotDm,
+import {
+  UNREAD_DISPLAY_CAP,
+  type MemberDto,
+  type MessageDto,
+  type SnapshotChannel,
+  type SnapshotDm,
 } from "@emberchat/protocol";
 import type { Db } from "../../db/index.js";
 import { conversations, messages } from "../../db/schema.js";
@@ -16,15 +17,24 @@ import type { MessageRow } from "../history/sink.js";
 import { seenByChannel } from "../seen-members/store.js";
 import type { FchatSession, SessionState } from "@emberchat/session-engine";
 
-/** Unread counts are capped server-side; the client renders 99 as "99+". */
-const UNREAD_CAP = 99;
+/**
+ * How many unread rows a conversation's count may scan — one PAST the largest
+ * number a badge shows exactly, so a saturated count is distinguishable from a
+ * conversation that happens to hold exactly that many (#582).
+ *
+ * Scanning to the cap itself was the original bug: the count topped out at 99,
+ * `clampBadge` only says "99+" above 99, so the badge sat at a flat 99 while
+ * the log's own uncapped count climbed past it. Reporting 100 costs one extra
+ * row and makes the saturated case say what it means.
+ */
+const UNREAD_SCAN = UNREAD_DISPLAY_CAP + 1;
 
 /**
  * Per-conversation unread + mention counts past the read cursor, computed in
  * one pass. The inner ORDER BY + LIMIT caps the rows *scanned* per
- * conversation at UNREAD_CAP, newest first (a deterministic window walking
+ * conversation at UNREAD_SCAN, newest first (a deterministic window walking
  * the (conversation_id, id desc) index and stopping early) — a busy channel
- * with 40k unread costs the same as one with 99. Own sends never count as
+ * with 40k unread costs the same as one with 100. Own sends never count as
  * unread (matching the client's live bump), and neither do roleplay ads —
  * ads never affect unread in any view (M10). Mentions read the stored
  * `messages.mention` flag the sink stamped at persist time (M5) — no
@@ -36,7 +46,7 @@ const UNREAD_CAP = 99;
  * capped window, so the cap now bounds counted rows rather than scanned ones
  * — an identity that ignores a firehose pays a longer index walk. The
  * alternative (filter after the cap) would silently report zero unread
- * whenever the newest 99 rows all came from ignored characters.
+ * whenever the newest 100 rows all came from ignored characters.
  */
 async function conversationCounts(
   db: Db,
@@ -67,7 +77,7 @@ async function conversationCounts(
               and lower(ig.character) = lower(m.sender_character)
           )
         order by m.id desc
-        limit ${UNREAD_CAP}
+        limit ${UNREAD_SCAN}
       ) t
     ) u
     where c.identity_id = ${identityId}

@@ -16,6 +16,7 @@
 import { and, desc, eq, gt, lt, sql } from "drizzle-orm";
 import {
   resolvePrefs,
+  UNREAD_DISPLAY_CAP,
   type NotificationDto,
   type NotificationKind,
 } from "@emberchat/protocol";
@@ -50,8 +51,13 @@ const PRUNE_EVERY = 50;
 /** Excerpt length stored per row — a list-row preview, not the message. */
 const EXCERPT_MAX = 160;
 
-/** Unseen counts are capped like the badge totals; the client renders 99+. */
-const UNSEEN_CAP = 99;
+/**
+ * Unseen counts are capped like the badge totals — and, like them, must stop
+ * one PAST the largest number the bell shows exactly (#582), or a saturated
+ * count is indistinguishable from an inbox holding exactly that many and the
+ * badge can never render its "+".
+ */
+const UNSEEN_SCAN = UNREAD_DISPLAY_CAP + 1;
 
 /** Strip BBCode for the stored excerpt. Mirrors the client's previewText:
  * the wire grammar is `[name]`/`[name=arg]`/`[/name]`, so a bracket strip is
@@ -316,7 +322,7 @@ export class NotificationStore {
             ),
           )
           .orderBy(desc(notifications.id))
-          .limit(UNSEEN_CAP)
+          .limit(UNSEEN_SCAN)
           .as("capped"),
       );
     return row?.total ?? 0;
