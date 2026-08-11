@@ -8,7 +8,7 @@ import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { FchatSim } from "@emberchat/fchat-sim";
 import { serializeServerCommand } from "@emberchat/fchat-protocol";
-import type { NotificationDto } from "@emberchat/protocol";
+import { UNREAD_DISPLAY_CAP, type NotificationDto } from "@emberchat/protocol";
 import { buildApp } from "../../app.js";
 import { loadConfig } from "../../config.js";
 import type { Db } from "../../db/index.js";
@@ -440,6 +440,26 @@ describe("notification inbox — REST", () => {
       headers,
     });
     expect(after.json<{ unseen: number }>().unseen).toBe(1);
+  });
+
+  // #582: the bell badge had the same off-by-one the channel badge did — the
+  // count stopped AT the display cap, so `unseen > CAP` was unreachable and
+  // the badge sat at a flat 99 however deep the inbox got.
+  it("saturates the unseen count one past the display cap", async () => {
+    const { identityId } = await startIdentity();
+    const store = app.notifications;
+    for (let i = 1; i <= UNREAD_DISPLAY_CAP + 20; i += 1) {
+      await store.recordRtb(
+        identityId,
+        "note",
+        "Nyx Firemane",
+        `d${String(i)}`,
+      );
+    }
+    const unseen = await store.unseenCount(identityId);
+    expect(unseen).toBe(UNREAD_DISPLAY_CAP + 1);
+    // The property the badge actually depends on.
+    expect(unseen).toBeGreaterThan(UNREAD_DISPLAY_CAP);
   });
 
   it("deletes one entry, recounts the badge and fans the correction out (#506)", async () => {
