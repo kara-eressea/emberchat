@@ -166,6 +166,17 @@ Download in a browser here too, for the same reason.
       is the promise [docs/desktop.md](../docs/desktop.md) makes, and this is
       the check on it.
 
+### The menu bar
+
+- [ ] **No File/Edit/Help strip above the chat** (#579). `autoHideMenuBar`
+      hides it; it is not removed, so **Alt** must still summon it — and while
+      it is up, **Switch mode…**, **Save a backup…** and the update checkbox
+      must all still be there and still work. If Alt brings back nothing, the
+      menu was dropped rather than hidden and the shell's own items went with
+      it (`window.ts`, `menu.ts`).
+- [ ] **The window's usable height grew by the strip's height**, and nothing in
+      the web app is clipped at the top as a result.
+
 ### The notification area
 
 - [ ] **The icon is legible on a light and a dark taskbar.** Windows gets the
