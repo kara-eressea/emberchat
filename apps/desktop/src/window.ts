@@ -33,6 +33,12 @@ export function createMainWindow(
     height: 860,
     minWidth: 480,
     minHeight: 480,
+    // Windows/Linux: the File/Edit/Help strip above a chat client is chrome
+    // nobody asked for (#579). Hidden, not removed — Alt still summons it, so
+    // Electron's roles (copy/paste/quit) and this app's own items keep their
+    // home. macOS ignores this: its menu lives on the system bar, where it is
+    // conventional and costs the window nothing.
+    autoHideMenuBar: true,
     // No flash of empty chrome while the SPA boots.
     show: false,
     backgroundColor: "#000000",
