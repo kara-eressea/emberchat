@@ -370,6 +370,9 @@
   line-height: 1.35;
   color: var(--eb-faint);
   overflow-wrap: anywhere;
+  /* Same as `.cardStatus` (#583): the viewer shows the same status the mini
+     card does, and broke it the same way. */
+  white-space: pre-wrap;
 }
 
 .metaRow {
@@ -1409,6 +1412,12 @@
   line-height: 1.35;
   color: var(--eb-faint);
   overflow-wrap: anywhere;
+  /* A status is authored text and carries its own line breaks — an eicon grid
+     laid out as rows is the case that made this visible (#583). The message
+     log solves it the same way (`.body` in chat.module.css); without it the
+     newlines collapse to spaces and the grid reflows into one wrapping run.
+     Safe to let this grow: `.cardBody` scrolls. */
+  white-space: pre-wrap;
 }
 
 .cardChip {
