@@ -507,6 +507,15 @@ describe("outbox failed-row sweep", () => {
       expect((await rowsFor(identityId)).map((row) => row.bbcode)).toEqual([
         "recent",
       ]);
+      // The rows reaching their final state does NOT mean the fan-out has
+      // happened: #sweepFailed deletes first and only then awaits #fan, which
+      // runs its own `list` query before broadcasting. Waiting on the rows
+      // alone let this poll land inside that window on a loaded runner —
+      // three CI failures, `fan` undefined, nothing wrong with the code. Both
+      // observables belong in the same wait.
+      expect(
+        h.broadcasts.some((event) => event.identityId === identityId),
+      ).toBe(true);
     }, FRAME_WAIT_MS);
     // Attached devices are told, or their pending lists keep showing rows
     // the database no longer has.
