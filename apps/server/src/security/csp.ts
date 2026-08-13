@@ -31,11 +31,33 @@ import type { SessionLogger } from "@emberchat/session-engine";
 export type CspDirectiveEntry =
   string | ((req: IncomingMessage, res: ServerResponse) => string);
 
-/** `https://<host>` CSP source for every shipped preview host — the set the
- * browser must be allowed to load inline avatars, eicons and link previews
- * from. */
+/**
+ * The CSP sources one allowlist entry stands for: the host itself and its
+ * subdomains (#593).
+ *
+ * The client has always treated an allowlist entry as a suffix —
+ * `hostAllowed()` in the web app's `link-preview.ts` matches `i.imgur.com`
+ * against `imgur.com` — but this header listed exact hosts only, so the
+ * subdomain half of that was dead on arrival: the client resolved the preview
+ * and the browser then refused the request. Providers that serve media from
+ * unpredictable per-CDN subdomains were effectively unusable, because every new
+ * subdomain needed a manual add.
+ *
+ * Both forms are needed: a CSP `*.example.com` matches any number of leading
+ * labels but *not* the apex, so `https://example.com` has to be listed
+ * alongside it. Wildcards are only ever derived here, from an entry that has
+ * already passed the bare-hostname grammar — `sanitizePreviewHost` still
+ * rejects a stored pref containing one.
+ */
+function hostSources(host: string): string[] {
+  return [`https://${host}`, `https://*.${host}`];
+}
+
+/** `https://<host>` CSP sources for every shipped preview host, each with its
+ * subdomain wildcard — the set the browser must be allowed to load inline
+ * avatars, eicons and link previews from. */
 export function mediaHostSources(): string[] {
-  return DEFAULT_IMAGE_PREVIEW_HOSTS.map((host) => `https://${host}`);
+  return DEFAULT_IMAGE_PREVIEW_HOSTS.flatMap((host) => hostSources(host));
 }
 
 /** The shipped preview hosts, lowercased, for de-duping user-added entries out
@@ -43,6 +65,21 @@ export function mediaHostSources(): string[] {
 const DEFAULT_PREVIEW_HOST_SET = new Set<string>(
   DEFAULT_IMAGE_PREVIEW_HOSTS.map((host) => host.toLowerCase()),
 );
+
+/** Is this user-added host already permitted by a shipped default — as the
+ * same host, or as a subdomain of one now that defaults carry a wildcard?
+ * Keeps the header from repeating what it already says. */
+function coveredByDefaults(host: string): boolean {
+  if (DEFAULT_PREVIEW_HOST_SET.has(host)) {
+    return true;
+  }
+  for (const shipped of DEFAULT_PREVIEW_HOST_SET) {
+    if (host.endsWith(`.${shipped}`)) {
+      return true;
+    }
+  }
+  return false;
+}
 
 /**
  * Reduce an untrusted preference entry to a bare, header-safe hostname, or
@@ -98,13 +135,14 @@ export function unionPreviewHosts(
   return [...hosts].sort();
 }
 
-/** The space-joined `https://<host>` sources for user-added hosts that are not
- * already among the shipped defaults — the value appended to `img-src`/
- * `media-src`. Empty string when there is nothing extra to permit. */
+/** The space-joined `https://<host>` sources — each with its subdomain
+ * wildcard (#593) — for user-added hosts the shipped defaults do not already
+ * cover. The value appended to `img-src`/`media-src`; empty string when there
+ * is nothing extra to permit. */
 export function extraMediaSourceString(unionHosts: readonly string[]): string {
   return unionHosts
-    .filter((host) => !DEFAULT_PREVIEW_HOST_SET.has(host))
-    .map((host) => `https://${host}`)
+    .filter((host) => !coveredByDefaults(host))
+    .flatMap((host) => hostSources(host))
     .join(" ");
 }
 

@@ -580,6 +580,13 @@ describe("security headers", () => {
         .find((d) => d.startsWith("media-src "));
       expect(imgSrc).toContain(`https://${HOST}`);
       expect(mediaSrc).toContain(`https://${HOST}`);
+      // …and its subdomains, which is what makes an unpredictable per-CDN
+      // subdomain loadable rather than needing its own allowlist entry (#593).
+      // The client's matcher has always treated an entry as a suffix; before
+      // this the header did not, so the browser refused what the client
+      // resolved.
+      expect(imgSrc).toContain(`https://*.${HOST}`);
+      expect(mediaSrc).toContain(`https://*.${HOST}`);
       // The malformed entry was sanitized out — no directive injection.
       expect(after).not.toContain("script-src *");
       expect(imgSrc).not.toContain("evil.example");
