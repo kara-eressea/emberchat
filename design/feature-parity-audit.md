@@ -1,5 +1,13 @@
 # Feature-parity audit vs. the official F-Chat 3.0 client
 
+> **Historical snapshot — read as a record, not a plan.** This is what the
+> comparison looked like at M6 (2026-07-15). Its five `❓ decision` items were
+> all made, and the outcomes are recorded in the Decisions section at the
+> bottom. Its `📅 M8` labels predate the MX desktop and MP mobile tracks and no
+> longer describe the plan — "Auto-updater, tray, Electron shell 📅 M8" became
+> the whole MX track, for instance. Nothing here is a backlog: open work is on
+> the issue board (`gh issue list`).
+
 M6 step 8 (2026-07-15). Compares EmberChat against the official client
 (github.com/f-list/exported, "chat3client") feature by feature, and lists
 the popular Rising fork's additions separately. Sources: the official
