@@ -48,8 +48,11 @@ export const UI_SCALE_MIN = 80;
 export const UI_SCALE_MAX = 150;
 /** `[12:04]` · `[12:04:33]` · hidden. */
 export const TIMESTAMP_FORMATS = ["time", "seconds", "off"] as const;
-/** Inline images vs name chips with a hover preview (decisions.md §8). */
-export const EICON_DISPLAY_MODES = ["inline", "name"] as const;
+/** Inline images vs name chips with a hover preview (decisions.md §8), vs
+ * "off" — the chip with no preview at all, which is the blocked-eicon
+ * rendering applied to every eicon (#585). "name" still previews on hover, so
+ * it is not a way to stop seeing eicons; "off" is. */
+export const EICON_DISPLAY_MODES = ["inline", "name", "off"] as const;
 /** Link previews (M8, decisions.md §14): click = a plain click on a
  * previewable media link opens the floating preview (Ctrl/Cmd/middle
  * click still navigates); hover = ~250ms hover opens it; off = links are
@@ -156,6 +159,19 @@ const prefsShape = {
    * rows (#416). Off restores the denser text-only rows; the status dot and
    * colouring on the row itself stay either way. */
   sidebarAvatars: z.boolean(),
+  /** Character portraits, everywhere (#585). Off keeps the layout — every
+   * avatar falls back to the initial-on-colour chip it already shows while
+   * loading — and also stops the inline `[icon]` tag in messages and statuses
+   * from rendering a portrait. Distinct from `sidebarAvatars`, which removes
+   * the sidebar's avatar element entirely for denser rows: this one is about
+   * not displaying the imagery, not about the row shape. */
+  showCharacterIcons: z.boolean(),
+  /** Other people's status messages (#585). Off hides them wherever they
+   * render — member rows, the DM header, both profile surfaces, and the
+   * sidebar's hover tooltips. Deliberately *others* only: your own status
+   * stays visible everywhere, because hiding it would make it impossible to
+   * see what you are broadcasting. */
+  showOthersStatus: z.boolean(),
   /** Mini profile card placement: anchored to the clicked name, or docked
    * in the bottom-right corner so it never covers the conversation. */
   miniCardPlacement: z.enum(MINI_CARD_PLACEMENTS),
@@ -352,6 +368,8 @@ export const PREFS_DEFAULTS: UserPrefs = {
   uiScale: 100,
   colorblindMode: false,
   sidebarAvatars: true,
+  showCharacterIcons: true,
+  showOthersStatus: true,
   miniCardPlacement: "anchored",
   timestampFormat: "time",
   use24HourClock: true,

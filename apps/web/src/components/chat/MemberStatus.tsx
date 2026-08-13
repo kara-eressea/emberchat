@@ -19,14 +19,21 @@ const ICON_PX = 14;
 
 export const MemberStatus = memo(function MemberStatus({
   statusmsg,
+  self = false,
 }: {
   statusmsg: string;
+  /** Your own row, which `showOthersStatus` never hides (#585). Defaults to
+   * false so a new call site errs towards hiding rather than leaking. */
+  self?: boolean;
 }) {
+  const hidden = !useUserPrefs().showOthersStatus && !self;
   const segments = useMemo(() => statusSegments(statusmsg), [statusmsg]);
   // The hover tooltip stays the flattened plain text — the full status, for
   // the common case where the line is clipped.
   const plain = useMemo(() => wireToPlainText(statusmsg), [statusmsg]);
-  if (segments.length === 0) {
+  // After the memos, never between them — an early return above a hook is a
+  // conditional hook call.
+  if (hidden || segments.length === 0) {
     return null;
   }
   return (
@@ -65,8 +72,13 @@ function StatusIcon({ tag, name }: { tag: "icon" | "eicon"; name: string }) {
   const prefs = useUserPrefs();
   const src = tag === "eicon" ? eiconUrl(name) : avatarUrl(name);
   const suppressed =
-    tag === "eicon" &&
-    (hasEicon(prefs.eiconBlocked, name) || prefs.eiconDisplay === "name");
+    tag === "icon"
+      ? // A portrait in a status is still a portrait (#585).
+        !prefs.showCharacterIcons
+      : hasEicon(prefs.eiconBlocked, name) ||
+        // Both non-inline modes degrade to the name here: the row has no room
+        // for "name" mode's hover preview, and "off" wants no image anywhere.
+        prefs.eiconDisplay !== "inline";
   if (src === undefined || suppressed) {
     return <>{name}</>;
   }

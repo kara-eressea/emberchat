@@ -202,6 +202,9 @@ export function MemberList({
                 key={member.character}
                 member={member}
                 role={group.role}
+                self={
+                  member.character.toLowerCase() === ownCharacter.toLowerCase()
+                }
                 onOpenMenu={openMenu}
               />
             ))}
@@ -280,10 +283,13 @@ type OpenMenu = (
 const MemberRow = memo(function MemberRow({
   member,
   role,
+  self,
   onOpenMenu,
 }: {
   member: MemberDto;
   role: ChannelRole;
+  /** Your own row — `showOthersStatus` never hides your status (#585). */
+  self: boolean;
   onOpenMenu: OpenMenu;
 }) {
   const dot = presenceDot(true, member.status);
@@ -338,7 +344,7 @@ const MemberRow = memo(function MemberRow({
         {/* Status on a second line under the name (#217), in the restricted
             BBCode subset a row can carry (#494) — colours and line-height
             images, never the full message renderer. */}
-        <MemberStatus statusmsg={member.statusmsg} />
+        <MemberStatus statusmsg={member.statusmsg} self={self} />
       </span>
     </button>
   );

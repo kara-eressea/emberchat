@@ -129,6 +129,32 @@ export function AppearancePane({ identityId }: { identityId: string }) {
       </FieldRow>
 
       <FieldRow
+        label="Show character icons"
+        help="Off replaces every profile picture with the character's initial, and stops [icon] tags in messages and statuses from loading one"
+      >
+        <Toggle
+          label="Show character icons"
+          checked={prefs.showCharacterIcons}
+          onChange={(showCharacterIcons) => {
+            set({ showCharacterIcons });
+          }}
+        />
+      </FieldRow>
+
+      <FieldRow
+        label="Show other people's status messages"
+        help="Off hides them in member lists, headers and profiles. Your own status stays visible"
+      >
+        <Toggle
+          label="Show other people's status messages"
+          checked={prefs.showOthersStatus}
+          onChange={(showOthersStatus) => {
+            set({ showOthersStatus });
+          }}
+        />
+      </FieldRow>
+
+      <FieldRow
         label="Profile card position"
         help="Anchored opens the card under the name you clicked; docked parks it in the bottom-right corner, out of the conversation"
       >
@@ -246,6 +272,7 @@ export function AppearancePane({ identityId }: { identityId: string }) {
           options={[
             { value: "inline", label: "Inline" },
             { value: "name", label: "Name only" },
+            { value: "off", label: "Off" },
           ]}
           value={prefs.eiconDisplay}
           onChange={(eiconDisplay) => {
