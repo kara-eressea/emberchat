@@ -86,6 +86,7 @@ import {
   type CollapsedSections,
   type SidebarSection,
 } from "./sidebar-sections.js";
+import { SfwToggle } from "./SfwToggle.js";
 import styles from "./shell.module.css";
 
 /** Bounded wait for the joined conversation row to reach the store. */
@@ -703,6 +704,7 @@ export function Sidebar({ session, activeConvId }: SidebarProps) {
         <MeAvatarToggle character={session.character} />
         <MeStatus session={session} online={online} />
         <PowerButton session={session} />
+        <SfwToggle />
         <button
           type="button"
           className={styles.meGear}
