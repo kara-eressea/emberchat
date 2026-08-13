@@ -8,6 +8,16 @@
     "test": {
       "dependsOn": ["^build"]
     },
+    // The admin-CLI tests spawn `node dist/cli/admin.js` — the server's *own*
+    // build output, not a dependency's — so its tests need "build" too. This
+    // used to hold by accident: one CI job ran `pnpm build` before `pnpm test`,
+    // so the dist was simply lying around. Splitting the suites onto their own
+    // runners (#591) removed that coincidence and the tests failed on a missing
+    // module, which is the graph telling the truth about a dependency that was
+    // always real.
+    "@emberchat/server#test": {
+      "dependsOn": ["^build", "build"]
+    },
     "e2e": {
       // "build" (the web app's own) as well as its dependencies': the caret
       // specs run against `vite preview`, i.e. the built bundle.
