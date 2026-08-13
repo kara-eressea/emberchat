@@ -8,9 +8,26 @@ on:
   # queued PR waits forever for a required check that never starts.
   merge_group:
 
+# One job used to run build + every package's tests + lint + e2e on a single
+# two-core runner (#591). `turbo run test` fans all packages out in parallel and
+# each one's vitest forks its own worker pool, so at peak that runner hosted the
+# server suite's testcontainers Postgres, the web suite's 133 jsdom files, and
+# five more suites at once. Whichever suite lost the CPU race hit whichever
+# fixed timeout it happened to be standing on — failures that were
+# timeout-shaped, load-sensitive, and never the same test twice, on branches
+# that could not have caused them.
+#
+# The suites now get a runner each. Parallelism stays *between* runners and is
+# gone *within* one, which is what the flakes were about; nothing here raises a
+# budget, because raising budgets hides the symptom and slows every genuine
+# failure's feedback loop. It also shortens the critical path: e2e (~8.5 min of
+# the old job's ~13) no longer waits behind ~2.5 min of tests and lint.
+#
+# `build-test-lint` survives as the aggregator at the bottom — it is the one
+# required status check on `main`, so keeping the name means branch protection
+# needs no edit and no window opens where nothing is required.
 jobs:
-  ci:
-    name: build-test-lint
+  build-lint:
     runs-on: ubuntu-latest
     env:
       COREPACK_ENABLE_DOWNLOAD_PROMPT: 0
@@ -22,9 +39,76 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # The whole-workspace typecheck as well as the build — no other job runs
+      # `build` unfiltered, so this is what fails on a type error in a package
+      # the test legs don't pull in.
       - run: pnpm build
-      - run: pnpm test
       - run: pnpm lint
+
+  # The heaviest single suite, and the only one that wants Docker: its
+  # testcontainers Postgres and fchat-sim get the runner to themselves.
+  test-server:
+    runs-on: ubuntu-latest
+    env:
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: 0
+    steps:
+      - uses: actions/checkout@v7
+      - run: corepack enable
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo run test --filter=@emberchat/server
+
+  # 133 jsdom files across a worker pool — the suite most sensitive to losing
+  # the CPU race, and the source of two of the three #591 sightings.
+  test-web:
+    runs-on: ubuntu-latest
+    env:
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: 0
+    steps:
+      - uses: actions/checkout@v7
+      - run: corepack enable
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo run test --filter=@emberchat/web
+
+  # Everything else — desktop plus the six pure packages. Negation filters so a
+  # new package joins this leg by existing, rather than being silently untested
+  # until someone remembers to list it.
+  test-packages:
+    runs-on: ubuntu-latest
+    env:
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: 0
+    steps:
+      - uses: actions/checkout@v7
+      - run: corepack enable
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: >-
+          pnpm turbo run test
+          --filter=!@emberchat/server
+          --filter=!@emberchat/web
+
+  e2e:
+    runs-on: ubuntu-latest
+    env:
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: 0
+    steps:
+      - uses: actions/checkout@v7
+      - run: corepack enable
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
       # Two second engines, each scoped to where it can disagree (see
       # playwright.config.ts). Firefox: the typography spec's carets and font
       # metrics, plus the open-at-the-tail family — neither measurable from the
@@ -65,7 +149,7 @@ jobs:
   #   * the two admin-CLI tests need a second *process*, and two processes
   #     over one pglite data directory see two different databases (#558).
   #
-  # All three still run, unweakened, in the job above — which is the run that
+  # All three still run, unweakened, in `test-server` — which is the run that
   # protects those properties on a server. `src/modules/auth` is in the subset
   # regardless: it is the only suite that meets the CLI at all, so leaving it
   # out left that path CI-blind.
@@ -129,3 +213,34 @@ jobs:
           echo "::error::server image failed to boot"
           docker logs smoke
           exit 1
+
+  # The single required status check on `main` (branch protection, `strict`).
+  # It carries the name the one big job used to have, so splitting that job
+  # into five needed no protection edit — and adding or renaming a leg in
+  # future only means editing `needs` here, never the repo settings.
+  #
+  # `if: always()` so the check still reports when a leg fails or is skipped;
+  # without it this job would be skipped too, and a skipped required check
+  # blocks the PR forever with no failure to read. The `contains` test is what
+  # actually enforces the legs: `needs.*.result` is every dependency's outcome,
+  # and anything that is not `success` fails the aggregate.
+  #
+  # Deliberately *not* in `needs`: `server-suite-pglite` and `image-boot-smoke`.
+  # Neither gated merges before this split, and making them blocking is a
+  # merge-policy change rather than a flake fix.
+  build-test-lint:
+    name: build-test-lint
+    runs-on: ubuntu-latest
+    if: ${{ always() }}
+    needs: [build-lint, test-server, test-web, test-packages, e2e]
+    steps:
+      - name: Verify every leg succeeded
+        run: |
+          results='${{ join(needs.*.result, " ") }}'
+          echo "leg results: $results"
+          for result in $results; do
+            if [ "$result" != "success" ]; then
+              echo "::error::a CI leg did not succeed ($results)"
+              exit 1
+            fi
+          done
