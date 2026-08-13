@@ -7,7 +7,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const cmdMock = vi.hoisted(() => vi.fn(() => Promise.resolve({ ok: true })));
+const cmdMock = vi.hoisted(() => vi.fn());
 vi.mock("../gateway/socket.js", () => ({ gateway: { cmd: cmdMock } }));
 vi.mock("../theme/theme.js", () => ({
   hydrateTheme: vi.fn(),
@@ -38,6 +38,8 @@ beforeEach(() => {
       } as unknown as IdentitySession,
     },
   });
+  cmdMock.mockReset();
+  cmdMock.mockResolvedValue({ ok: true });
 });
 
 afterEach(() => {
