@@ -92,11 +92,37 @@ test("full slice: connect, join, chat both ways, PMs, live members, history scro
   await viewer.getByRole("tab", { name: "Details" }).click();
   await expect(viewer.getByText("Gender")).toBeVisible();
   await expect(viewer.getByText("Female")).toBeVisible();
-  // Insights against a character we just chatted with in Frontpage.
+  // Insights against someone we share Frontpage with (#615). This used to
+  // accept `/YOU × Nyx Firemane|crossed paths/` — the two branches are
+  // mutually exclusive, so an alternation over both passed whichever way the
+  // feature went and could only ever hide a regression.
+  //
+  // Which branch is deterministic here: `crossed` is true when messages were
+  // exchanged, or the character was seen talking, or `sharedChannels` is
+  // non-empty (ProfileViewer), and the server derives `sharedChannels` live
+  // from session state — the channels whose member list holds the name. Nyx
+  // is a seeded Frontpage member and we joined Frontpage above, so the
+  // crossed branch is the only reachable one and the empty state is a bug.
   await viewer.getByRole("tab", { name: "Insights" }).click();
+  await expect(viewer.getByText("YOU × Nyx Firemane")).toBeVisible();
   await expect(
-    viewer.getByText(/YOU × Nyx Firemane|crossed paths/),
+    viewer.getByText("from your local history, never fetched from F-List"),
   ).toBeVisible();
+  // The shared channel is what makes us "crossed" at all, so assert the value
+  // and not just its label: "none right now" would mean the derivation broke
+  // while the eyebrow still rendered. Exact text — the insight rows are label
+  // and value spans, not table rows, so there is no row role to filter on.
+  await expect(viewer.getByText("Shared channels")).toBeVisible();
+  await expect(viewer.getByText("Frontpage", { exact: true })).toBeVisible();
+  // No DMs with Nyx at this point, which the Conversation group states
+  // positively. Exact again: the provenance line above contains the word
+  // "never" mid-sentence, and a substring match would pass on that alone.
+  await expect(viewer.getByText("Last chatted")).toBeVisible();
+  await expect(viewer.getByText("never", { exact: true })).toBeVisible();
+  // And the branch this test used to tolerate must be absent.
+  await expect(
+    viewer.getByText("You haven't crossed paths yet"),
+  ).not.toBeVisible();
 
   // ── Images + Guestbook (M8 step 10) ────────────────────────────────────
   // Images come from the cached character-data payload (fixture-seeded in
