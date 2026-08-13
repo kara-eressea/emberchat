@@ -33,7 +33,9 @@ Established practice, so follow it rather than inventing a shape:
 
 - **A track gets a GitHub milestone and a package cut of issues** — one issue per landable package, dependency-ordered, each with its own PR. That is what WP-A/WP-B (#521/#522), MP1–MP4 (#375–#378), the MX milestone (#295→#306) and the UP-A…E cut in `design/uploads.md` all are.
 - **An issue that grows a package cut should be split** rather than grown. If a single issue's plan sprouts phases, cut it into sub-issues and open a milestone to hold them, leaving the original as the parent or closing it in favour of the cut. #580 → #585 + #581 + #580 is the worked example: the audit found two prerequisites hiding inside one toggle, and splitting them made each independently reviewable.
-- **Order the cut so each piece can land on `main` alone.** Stacked PRs are fine (base one branch on another; GitHub retargets as each merges), but each should still be green and shippable on its own.
+- **Order the cut so each piece can land on `main` alone.** Stacked PRs are fine — base one branch on another — but each should still be green and shippable on its own.
+- **Retarget a child PR to `main` *before* merging its parent.** Merging with `--delete-branch` removes the base branch a stacked PR points at, and GitHub does not reliably retarget: on 2026-08-13 it **closed** #600 outright when #599's branch went, and a closed PR can be neither reopened nor retargeted ("Cannot change the base branch of a closed pull request") — #600 had to be reopened as #624. One `gh pr edit <child> --base main` before merging the parent avoids it entirely.
+- **A squash merge rewrites the parent's commit hash**, so a stacked branch cannot simply merge `main` — it would carry a duplicate of work already landed. Replay it instead: `git rebase --onto main <parent-sha-before-merge> <branch>`, which is why the parent's SHA is worth recording before the merge rather than after.
 
 ## Dev environment
 
