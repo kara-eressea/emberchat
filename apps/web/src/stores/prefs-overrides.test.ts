@@ -8,7 +8,10 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const cmdMock = vi.hoisted(() => vi.fn(() => Promise.resolve({ ok: true })));
+// Untyped like the sibling patch.test.ts mock: a zero-arg implementation
+// gives the mock an empty call tuple, and asserting on calls[0][0] then
+// fails to compile.
+const cmdMock = vi.hoisted(() => vi.fn());
 vi.mock("../gateway/socket.js", () => ({ gateway: { cmd: cmdMock } }));
 vi.mock("../theme/theme.js", () => ({
   hydrateTheme: vi.fn(),
@@ -41,7 +44,8 @@ beforeEach(() => {
       } as unknown as IdentitySession,
     },
   });
-  cmdMock.mockClear();
+  cmdMock.mockReset();
+  cmdMock.mockResolvedValue({ ok: true });
 });
 
 afterEach(() => {
