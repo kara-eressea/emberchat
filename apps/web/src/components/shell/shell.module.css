@@ -993,6 +993,69 @@
   text-decoration: none;
 }
 
+/* SFW quick toggle (#580) — the MeBar's eye, and the confirmation popover it
+   raises on the way *out* of SFW mode (never on the way in). */
+.sfwWrap {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+}
+
+.sfwOn {
+  color: var(--eb-accent);
+}
+
+.sfwOn:hover {
+  color: var(--eb-accent);
+}
+
+.sfwConfirm {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  z-index: 40;
+  width: 232px;
+  padding: 10px;
+  border: 1px solid var(--eb-line);
+  border-radius: 10px;
+  background: var(--eb-surface-raised);
+  box-shadow: var(--eb-shadow-menu);
+}
+
+.sfwConfirmText {
+  margin: 0 0 9px;
+  font-size: var(--eb-font-small);
+  line-height: 1.4;
+  color: var(--eb-dim);
+}
+
+.sfwConfirmRow {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.sfwConfirmCancel,
+.sfwConfirmGo {
+  padding: 5px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--eb-line);
+  font-size: var(--eb-font-small);
+  cursor: pointer;
+}
+
+.sfwConfirmCancel {
+  background: none;
+  color: var(--eb-dim);
+}
+
+.sfwConfirmGo {
+  background: var(--eb-accent);
+  border-color: var(--eb-accent);
+  color: var(--eb-on-accent);
+}
+
 /* Mention badge (COMPONENTS.md §4): accent fill, bg text — reads as "@n". */
 .navBadgeMention {
   background: var(--eb-accent);

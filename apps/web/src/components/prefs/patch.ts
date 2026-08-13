@@ -27,8 +27,12 @@ function hydrate(prefs: UserPrefs): void {
   hydrateInterface(prefs);
 }
 
-/** Push the freshly folded effective prefs into every slice and repaint. */
-function applyOverrides(): void {
+/**
+ * Push the freshly folded effective prefs into every slice and repaint.
+ * Exported for the SFW toggle (#580), which changes a layer directly rather
+ * than going through a patch.
+ */
+export function refreshEffectivePrefs(): void {
   const store = useSessionsStore.getState();
   store.reapplyPrefOverrides();
   const effective = Object.values(useSessionsStore.getState().sessions).find(
@@ -57,7 +61,7 @@ export function setAppearanceSync(identityId: string, synced: boolean): void {
     }
     useOverridesStore.getState().setLayer("device", snapshot);
   }
-  applyOverrides();
+  refreshEffectivePrefs();
 }
 
 export async function patchPrefs(
@@ -82,7 +86,7 @@ export async function patchPrefs(
 
   if (Object.keys(local).length > 0) {
     useOverridesStore.getState().mergeLayer("device", local);
-    applyOverrides();
+    refreshEffectivePrefs();
   }
   if (Object.keys(remote).length === 0) {
     // Nothing left for the server — a purely local edit always "succeeds".

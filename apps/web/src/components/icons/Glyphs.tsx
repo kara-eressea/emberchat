@@ -49,6 +49,25 @@ export function SearchGlyph({ size }: GlyphProps): ReactNode {
   );
 }
 
+/**
+ * SFW mode (#580) — an eye, and the same eye struck through when the mode is
+ * on. One glyph in two states rather than two glyphs, so the button reads as a
+ * toggle of one thing.
+ */
+export function SfwGlyph({
+  size,
+  on = false,
+}: GlyphProps & { on?: boolean }): ReactNode {
+  return svg(
+    <>
+      <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" />
+      <circle cx="12" cy="12" r="3" />
+      {on && <path d="M4 20L20 4" />}
+    </>,
+    size,
+  );
+}
+
 /** Settings gear — replaces the small `⚙` glyph on the preferences button. */
 export function GearGlyph({ size }: GlyphProps): ReactNode {
   return svg(
