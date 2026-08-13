@@ -8,6 +8,7 @@
 import { create } from "zustand";
 import { PREFS_DEFAULTS, UNREAD_DISPLAY_CAP } from "@emberchat/protocol";
 import { genderColorVar } from "../theme/tokens.js";
+import { effectivePrefs, useOverridesStore } from "./prefs-overrides.js";
 import type {
   CampaignDto,
   OutboxItemDto,
@@ -111,8 +112,15 @@ export interface IdentitySession {
   chatop: boolean;
   /** The user's delayed-send window (per-user; mirrored per slice). */
   sendDelaySeconds: number;
-  /** The user's resolved preferences (per-user; mirrored per slice). */
+  /** The user's resolved preferences (per-user; mirrored per slice), with any
+   * device-local overrides already folded in (#581) — so every reader gets
+   * the effective value without knowing overrides exist. */
   prefs: UserPrefs;
+  /** The same document *without* overrides: what the server holds and what a
+   * pane edit patches against. Lifting an override reveals this again.
+   * Optional so a hand-built test fixture need not carry both; absent means
+   * "no override has ever applied here", and `prefs` is the synced document. */
+  syncedPrefs?: UserPrefs;
   /** Messages waiting in the server-side outbox for this identity. */
   outbox: OutboxItemDto[];
   /** The identity's ad-rotation campaign (M11); null = none exists. */
@@ -229,8 +237,12 @@ interface SessionsState {
     d: { sendDelaySeconds: number; prefs: UserPrefs },
   ): void;
   /** Optimistic local prefs overwrite across every slice — prefs are per
-   * user, so a pane edit must not wait for the per-identity fan-out. */
+   * user, so a pane edit must not wait for the per-identity fan-out. Takes
+   * the *synced* document; effective prefs are recomputed from it. */
   applyPrefsLocal(prefs: UserPrefs): void;
+  /** Re-fold the device-local override layers over every slice's synced
+   * document (#581). Called when a layer changes, never on a server frame. */
+  reapplyPrefOverrides(): void;
   /** Full ignore-list overwrite (ignore.updated / snapshot). */
   applyIgnores(identityId: string, characters: string[]): void;
   applySessionStatus(
@@ -441,6 +453,7 @@ function emptySession(identityId: string): IdentitySession {
     chatop: false,
     sendDelaySeconds: 0,
     prefs: PREFS_DEFAULTS,
+    syncedPrefs: PREFS_DEFAULTS,
     outbox: [],
     campaign: null,
     channels: {},
@@ -787,7 +800,11 @@ export const useSessionsStore = create<SessionsState>()((set, get) => {
         iconBlacklist: [...d.self.iconBlacklist],
         chatop: d.self.chatop,
         sendDelaySeconds: d.self.sendDelaySeconds,
-        prefs: d.self.prefs,
+        prefs: effectivePrefs(
+          d.self.prefs,
+          useOverridesStore.getState().overrides,
+        ),
+        syncedPrefs: d.self.prefs,
         outbox: [...d.self.outbox],
         campaign: d.self.campaign,
         channels,
@@ -823,16 +840,40 @@ export const useSessionsStore = create<SessionsState>()((set, get) => {
       patch(identityId, (session) => ({
         ...session,
         sendDelaySeconds,
-        prefs,
+        // The server document is authoritative for what is *synced*; the
+        // device's own overrides still win over it locally (#581), so a
+        // fan-out from another device never repaints this one's appearance.
+        prefs: effectivePrefs(prefs, useOverridesStore.getState().overrides),
+        syncedPrefs: prefs,
       }));
     },
 
     applyPrefsLocal(prefs) {
+      const overrides = useOverridesStore.getState().overrides;
+      const next = effectivePrefs(prefs, overrides);
       set((state) => ({
         sessions: Object.fromEntries(
           Object.entries(state.sessions).map(([id, session]) => [
             id,
-            { ...session, prefs },
+            { ...session, prefs: next, syncedPrefs: prefs },
+          ]),
+        ),
+      }));
+    },
+
+    reapplyPrefOverrides() {
+      const overrides = useOverridesStore.getState().overrides;
+      set((state) => ({
+        sessions: Object.fromEntries(
+          Object.entries(state.sessions).map(([id, session]) => [
+            id,
+            {
+              ...session,
+              prefs: effectivePrefs(
+                session.syncedPrefs ?? session.prefs,
+                overrides,
+              ),
+            },
           ]),
         ),
       }));

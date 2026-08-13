@@ -4,7 +4,7 @@
 // operations (gateway contract) — the sessions store applies them as
 // overwrites / set add-remove; only message.new is exactly-once.
 
-import type { GatewayEvent, ServerFrame } from "@emberchat/protocol";
+import type { GatewayEvent, ServerFrame, UserPrefs } from "@emberchat/protocol";
 
 import { isAutoStatusInFlight } from "../lib/auto-away.js";
 import { previewText, showMessageNotification } from "../lib/desktop-notify.js";
@@ -18,6 +18,18 @@ import { useSearchStore } from "../stores/search.js";
 import { sameCharacter, useSessionsStore } from "../stores/sessions.js";
 import { useUiStore } from "../stores/ui.js";
 import { hydrateInterface, hydrateTheme } from "../theme/theme.js";
+
+/**
+ * Repaint the shell from the prefs a slice actually resolved to — the server
+ * document with this device's override layers folded over it (#581). Falls
+ * back to the document itself if the slice isn't in the store yet.
+ */
+function hydratePrefs(identityId: string, fallback: UserPrefs): void {
+  const effective =
+    useSessionsStore.getState().sessions[identityId]?.prefs ?? fallback;
+  hydrateTheme(effective);
+  hydrateInterface(effective);
+}
 
 export function dispatchFrame(frame: ServerFrame): void {
   const sessions = useSessionsStore.getState();
@@ -53,8 +65,10 @@ export function dispatchFrame(frame: ServerFrame): void {
         frame.d.self.social === null &&
         sessions.sessions[frame.d.identityId]?.social !== undefined;
       sessions.applySnapshot(frame.d);
-      hydrateTheme(frame.d.self.prefs);
-      hydrateInterface(frame.d.self.prefs);
+      // Hydrate from the *effective* prefs the store just computed, not from
+      // the server document: a device with the appearance opt-out on (#581)
+      // must not repaint to the synced palette on every snapshot.
+      hydratePrefs(frame.d.identityId, frame.d.self.prefs);
       if (stale) {
         void loadSocial(frame.d.identityId, true).catch(() => undefined);
       }
@@ -297,8 +311,7 @@ function dispatchEvent(identityId: string, event: GatewayEvent): void {
       return;
     case "prefs.updated":
       sessions.applyPrefs(identityId, event.d);
-      hydrateTheme(event.d.prefs);
-      hydrateInterface(event.d.prefs);
+      hydratePrefs(identityId, event.d.prefs);
       return;
     case "campaign.updated":
       // Rotation-campaign fan-out (M11): full-state idempotent overwrite —
