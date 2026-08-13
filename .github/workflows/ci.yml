@@ -236,7 +236,10 @@ jobs:
     steps:
       - name: Verify every leg succeeded
         run: |
-          results='${{ join(needs.*.result, " ") }}'
+          # Single quotes inside the expression: GitHub's expression syntax has
+          # no double-quoted string literal, and using one fails the whole
+          # workflow at compile time with no job ever starting.
+          results='${{ join(needs.*.result, ' ') }}'
           echo "leg results: $results"
           for result in $results; do
             if [ "$result" != "success" ]; then
