@@ -15,6 +15,18 @@ A third-party web client + server ("bouncer") for **F-Chat**, the WebSocket chat
 - **Find something to look at later? File an issue.** Not a TODO comment, not a line in a design doc, not a paragraph appended to the tracker. A deferral that lives anywhere else is invisible to `gh issue list`, which means it is invisible. (Verified 2026-08-13: the repo has zero `TODO`/`FIXME` markers. Keep it that way.)
 - **Design docs explain, the board tracks.** `design/*.md` is for *why a thing is the way it is* — decisions, rationale, as-built notes. When a doc records something still to do, it should name the issue rather than restate the work. `design/milestones.md` tracks milestone progress and stops there.
 
+### Filing issues
+
+The board is only as useful as it is trustworthy, so these cut both ways — the first three get work *onto* it, the last two keep it from becoming a graveyard.
+
+- **The trigger is "not now", not "found".** Fixing it in the PR you are already writing? The PR is the record — no issue. Not fixing it now? File it before you forget, then get back to what you were doing.
+- **Never fix an incidental discovery inside an unrelated PR.** Noticing Y while doing X is the most common way a tight, reviewable PR becomes a sprawling one. File Y, finish X.
+- **A deferral in a comment must name its issue.** Comments explain why code is shaped as it is; they are not a backlog. A `deferred`/`for now` with no `#N` is exactly what hides work — #611 had to be excavated from a comment that said "captured so it is not rediscovered as a new bug", which is an issue's job written in the wrong place.
+- **What makes an issue worth filing:** the finding, where it lives (file and symbol), why it was not done now, and what the fix would be. Anything less is a note to yourself that nobody else — including you in three months — can act on.
+- **Do not file a wish with no failure mode**, and close `wontfix` freely. A board that only ever grows stops being a task board.
+
+Deliberately absent: any priority or severity ladder. `bug`/`enhancement`/`question` plus the `area:*` labels are enough at this size, and a P0–P3 scheme on a two-person project is ceremony that goes stale. Also absent: any "file before you start" rule — you would resent it on a one-line fix, and a rule people route around weakens the ones that matter.
+
 ### Sizing work: sub-issues under a milestone
 
 Established practice, so follow it rather than inventing a shape:
