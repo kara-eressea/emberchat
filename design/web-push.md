@@ -1,5 +1,10 @@
 # WP — Web Push
 
+> **Shipped — an as-built record, not a plan.** The WP track shipped. This
+> document explains what was built and why, which is what a design doc is for;
+> it is not a backlog. Open work lives on the issue board (`gh issue list`),
+> never here.
+
 *Implementation spec, written 2026-08-05 at the pre-MX planning conversation.
 User decisions locked there: Web Push ships **before** MX; payloads carry
 **full content** (sender + excerpt — RFC 8291 encrypts end-to-end, the

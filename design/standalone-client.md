@@ -1,5 +1,10 @@
 # Standalone Desktop Client — Design
 
+> **Shipped — an as-built record, not a plan.** Built as the MX track, which
+> is complete. This document explains what was built and why, which is what a
+> design doc is for; it is not a backlog. Open work lives on the issue board
+> (`gh issue list`), never here.
+
 *M7 step 8 (design only). Decided direction (2026-07-16, decisions.md §2): a
 desktop app (Tauri/Electron) with the session engine extracted into a shared
 library. Implementation is **post-v1.0**; this document exists so v1.0 code

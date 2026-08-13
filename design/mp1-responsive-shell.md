@@ -1,5 +1,10 @@
 # MP1 — Responsive shell (implementation spec)
 
+> **Shipped — an as-built record, not a plan.** MP1 shipped as **v0.21.0**.
+> This document explains what was built and why, which is what a design doc is
+> for; it is not a backlog. Open work lives on the issue board (`gh issue
+> list`), never here.
+
 Companion to [mobile-client.md](mobile-client.md) §MP1 and issue #375. Decided
 with the user 2026-08-02, work started 2026-08-03.
 

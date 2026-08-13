@@ -1,5 +1,10 @@
 # Milestone 10 — Ads & character search
 
+> **Shipped — an as-built record, not a plan.** M10 shipped as **v0.9.0**
+> (2026-07-20). This document explains what was built and why, which is what a
+> design doc is for; it is not a backlog. Open work lives on the issue board
+> (`gh issue list`), never here.
+
 *Created 2026-07-16 during the M8 scope session; **specced 2026-07-18** with
 the user. Ships as **v0.9.0**. Auto-posting/rotation and the remaining
 discovery extras are deferred to the [M11 candidate pool](milestone-11-discovery-extras.md).*

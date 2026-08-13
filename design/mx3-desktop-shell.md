@@ -1,5 +1,11 @@
 # MX3 — The desktop shell
 
+> **Shipped — an as-built record, not a plan.** MX3 is complete — the shell,
+> provisioning, chooser, thin client and tray all shipped. This document
+> explains what was built and why, which is what a design doc is for; it is
+> not a backlog. Open work lives on the issue board (`gh issue list`), never
+> here.
+
 *Implementation spec, written 2026-08-05 after MX2 closed. Covers issues
 #299 (scaffold + loopback boot), #300 (mode chooser), #301 (provisioning +
 secrets), #302 (thin-client mode), #304 (tray). Packaging/installers are MX4

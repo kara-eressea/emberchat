@@ -1,5 +1,10 @@
 # MX2 spike — pglite feasibility (#297)
 
+> **Shipped — an as-built record, not a plan.** MX2 is done; its findings were
+> built out in #298. This document explains what was built and why, which is
+> what a design doc is for; it is not a backlog. Open work lives on the issue
+> board (`gh issue list`), never here.
+
 Investigation only. Every verdict below cites a command that was run and what
 it printed; anything not executed is labelled **(not executed)**. The harnesses
 live in `design/spikes/mx2-pglite/` (see its README to reproduce).

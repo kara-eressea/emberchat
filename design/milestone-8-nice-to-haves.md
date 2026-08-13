@@ -1,5 +1,10 @@
 # Milestone 8 — Nice-to-haves: profiles, compatibility, eicon search
 
+> **Shipped — an as-built record, not a plan.** M8 shipped as **v0.7.0**
+> (2026-07-17). This document explains what was built and why, which is what a
+> design doc is for; it is not a backlog. Open work lives on the issue board
+> (`gh issue list`), never here.
+
 *Specced 2026-07-16 with the user. History: originally "service admin tooling
 + Electron" (managed-service era); rewritten to "client polish" by the M7
 standalone design pass; reshaped to the nice-to-haves slot at M7 close; now

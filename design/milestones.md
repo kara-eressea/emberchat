@@ -6,13 +6,13 @@ Statuses: `not started` · `in progress` · `done` · `blocked`
 
 | # | Milestone | Status | Depends on | Details |
 |---|---|---|---|---|
-| 1 | Thin vertical slice | done | — | [milestone-1-thin-vertical-slice.md](milestone-1-thin-vertical-slice.md) |
-| 2 | Always-online bouncer + catch-up | done | M1 | [milestone-2-always-online-bouncer.md](milestone-2-always-online-bouncer.md) |
-| 3 | Multi-identity | done | M2 | [milestone-3-multi-identity.md](milestone-3-multi-identity.md) |
-| 4 | Markdown layer + delayed send | done | M1 (parallel with M3) | [milestone-4-markdown-delayed-send.md](milestone-4-markdown-delayed-send.md) |
-| 5 | Highlights + preferences | done | M3, M4 | [milestone-5-highlights-preferences.md](milestone-5-highlights-preferences.md) |
-| 6 | Channel browser + channel ops | done | M1 (benefits from M3) | [milestone-6-channel-browser-ops.md](milestone-6-channel-browser-ops.md) |
-| 7 | Self-host hardening (rescoped 2026-07-16, was public-service hardening) | done | M1–M2 min., realistically M1–M6 | [milestone-7-self-host-hardening.md](milestone-7-self-host-hardening.md) |
+| 1 | Thin vertical slice | done | — | — |
+| 2 | Always-online bouncer + catch-up | done | M1 | — |
+| 3 | Multi-identity | done | M2 | — |
+| 4 | Markdown layer + delayed send | done | M1 (parallel with M3) | — |
+| 5 | Highlights + preferences | done | M3, M4 | — |
+| 6 | Channel browser + channel ops | done | M1 (benefits from M3) | — |
+| 7 | Self-host hardening (rescoped 2026-07-16, was public-service hardening) | done | M1–M2 min., realistically M1–M6 | — |
 | 8 | Nice-to-haves: profile viewer + compatibility + eicon search | **shipped v0.7.0** (2026-07-17) | M7 | [milestone-8-nice-to-haves.md](milestone-8-nice-to-haves.md) |
 | 9 | Client polish: LOW sweep, at-rest credentials, search, toolbar, light theme | **shipped v0.8.0** (2026-07-18) | M8 | [milestone-9-client-polish.md](milestone-9-client-polish.md) |
 | 10 | Ads & character search | **shipped — v0.9.0, 2026-07-20** | M8, M6 | [milestone-10-ads-and-search.md](milestone-10-ads-and-search.md) |
@@ -21,9 +21,18 @@ Statuses: `not started` · `in progress` · `done` · `blocked`
 | WP | Web Push notifications (planned 2026-08-05 at the pre-MX conversation; ordered ahead of the MX build per the user) | **in progress** — spec written same day: [web-push.md](web-push.md). Full-content encrypted payloads (user decision); push-only service worker (MP3's no-caching decision stands, test-enforced); PM trigger separate from the notification store (PMs never land there); subscriptions cascade with auth sessions. GitHub milestone "WP — Web Push"; package cut WP-A (server, #521) → WP-B (web, #522) | MP3 (manifest/PWA), the M9 notification inbox (#467/#468) | [web-push.md](web-push.md) |
 | MP | Mobile web client (responsive/PWA — planned 2026-07-23, after the polish soak; ordered ahead of the MX build) | **Complete — the whole track is shipped.** MP1 **v0.21.0** (#375), MP2 **v0.22.0** (#376), MP3 **v0.23.0** (#377), MP4 (#378, #500) tests and docs, no release of its own — the `mobile-webkit` E2E project, the MP1/MP3 coverage sweep, and the docs close-out. What remains is a real-device confidence pass on two phones — [mobile-device-checklist.md](mobile-device-checklist.md), MP2 §6 and MP3 §8 merged into one sitting — which is hardware work, not a commit. GitHub milestone "MP — Mobile web (PWA)" closed | presentation-layer only; no store distribution | [mobile-client.md](mobile-client.md) (closed-track index), [mp1-responsive-shell.md](mp1-responsive-shell.md), [mp2-touch.md](mp2-touch.md), [mp3-pwa.md](mp3-pwa.md), [mobile-device-checklist.md](mobile-device-checklist.md) |
 
+> **M1–M7 have no separate design doc.** Those seven were forward-looking plans
+> — goal, scope, verification — for work that shipped long ago, and everything
+> durable in them (the identity-rail IA, per-account ticket coalescing, the
+> human-readable URL scheme, the tenancy pivot) is stated in
+> [decisions.md](decisions.md) and [architecture.md](architecture.md), which are
+> the live references. They were deleted on 2026-08-13; the step checklists
+> below are what remains, and git history has the rest. M8–M11 kept their docs,
+> because those carry as-built detail that is not restated elsewhere.
+
 ## Milestone 1 step checklist
 
-Mirrors the ordered steps in [milestone-1-thin-vertical-slice.md](milestone-1-thin-vertical-slice.md); tick as each step's verification passes.
+The ordered steps; tick as each step's verification passes.
 
 - [x] 1. Repo scaffold (`pnpm build` green)
 - [x] 2. `fchat-protocol` codec + core command schemas
@@ -138,7 +147,7 @@ A kickoff audit against the milestone scope: the **read side of channel discover
 > audit and the user's sign-off it merge-committed to `main` (PR #92), v0.6.0
 > was tagged and released, and the branch was deleted.
 
-Kickoff audit = the 2026-07-16 codebase sanity check recorded in [milestone-7-self-host-hardening.md](milestone-7-self-host-hardening.md) (§ "Codebase sanity check vs. the pivot"). Headlines: registration is fully live with **no seed/bootstrap/CLI alternative** — every dev/test/E2E account drives `/register`, so step 1 is atomic by necessity; there is zero email/mailer debt to remove; the session engine is already almost a library (one Postgres-touching file, `connect-identity.ts`, stays behind on extraction). Steps below in dependency order.
+Kickoff audit = the 2026-07-16 codebase sanity check run against the tenancy pivot (§ "Codebase sanity check vs. the pivot"). Headlines: registration is fully live with **no seed/bootstrap/CLI alternative** — every dev/test/E2E account drives `/register`, so step 1 is atomic by necessity; there is zero email/mailer debt to remove; the session engine is already almost a library (one Postgres-touching file, `connect-identity.ts`, stays behind on extraction). Steps below in dependency order.
 
 - [x] 1. Admin CLI + registration gate (**atomic** — gating without the CLI bricks fresh instances and the test suite): `admin-cli` script in `apps/server` (create-user, reset-password; email still required — `app_users.email` is not-null unique, none is ever sent); `REGISTRATION_ENABLED` config (default **false**); migrate E2E `registerAndConnect`/`global-setup` and server tests off `/register` (E2E env sets the flag or uses the CLI); remove the Register UI, `/register` route, store/api actions, Landing + Login "Create account" links, and the orphan ToS checkbox; fix the Login "Forgot?" tooltip (reset is an admin-CLI op); riders: reword "public deployment" comments on `RATE_LIMIT_MAX`/`AUTH_RATE_LIMIT_MAX`, drop the unused `emailVerifiedAt` column + "email_tokens" schema comment, fix M8's stale "hosted service" line
 - [x] 2. Exposure hardening: login lockout/backoff; `@fastify/helmet` headers; WS origin checks; CSRF posture + secure-cookie flags review; expired `auth_sessions` cleanup + per-user session cap; gateway connect/hello rate-gate; dependency audit + secrets-handling review (folds the standing server hardening backlog)
