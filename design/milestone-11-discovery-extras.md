@@ -1,5 +1,10 @@
 # Milestone 11 — Discovery extras: ad rotation & ratings
 
+> **Shipped — an as-built record, not a plan.** M11 shipped as **v0.10.0**
+> (2026-07-20). This document explains what was built and why, which is what a
+> design doc is for; it is not a backlog. Open work lives on the issue board
+> (`gh issue list`), never here.
+
 *Specced 2026-07-20 with the user (scope Q&A, three rounds). Ships as
 **v0.10.0**. Created 2026-07-18 as the M10 deferral pool; the unpicked
 candidates remain pooled at the bottom.*

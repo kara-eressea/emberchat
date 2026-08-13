@@ -1,5 +1,10 @@
 # Milestone 9 — Client polish
 
+> **Shipped — an as-built record, not a plan.** M9 shipped as **v0.8.0**
+> (2026-07-18). This document explains what was built and why, which is what a
+> design doc is for; it is not a backlog. Open work lives on the issue board
+> (`gh issue list`), never here.
+
 *Split out of M8 on 2026-07-16; **specced and committed 2026-07-18** at
 kickoff. The user committed the full candidate pool (minus the activity
 heatmap, which stays parked) and chose to build the UI work directly

@@ -37,7 +37,7 @@ Established practice, so follow it rather than inventing a shape:
 | `design/decisions.md` | Locked architectural decisions (stack, tenancy, credentials, MVP scope) |
 | `design/architecture.md` | Monorepo layout, server/bouncer design, DB schema, client architecture, gateway protocol |
 | `design/milestones.md` | **Milestone status tracker** — open/closed milestones and their step checklists. Keep it updated as steps complete. It is *not* a backlog: open work lives on the issue board |
-| `design/milestone-*.md` | One file per milestone (1–10), dependency-ordered |
+| `design/milestone-8..11-*.md` | As-built records for the four milestones that carry detail not restated elsewhere. **M1–M7 had plan docs; they were deleted 2026-08-13** — forward-looking scope for long-shipped work, with everything durable in them already in `decisions.md`/`architecture.md`. The step checklists in `milestones.md` are what remains |
 | `design/standalone-client.md` | Desktop-client design (M7 step 8, in build as MX): embedded bouncer, session-library boundary (extracted at MX1), pglite, Electron |
 | `design/mx2-pglite-spike.md` | **MX2 spike findings** (#297) — pglite confirmed (PG 18.3, uuidv7 native, buildApp boots); the `Db` widening, fsync/no-lock caveats, `dumpDataDir()` backups, the #298 work map. Harnesses in `design/spikes/mx2-pglite/` |
 | `design/mx3-desktop-shell.md` | **MX3 implementation spec** — thin Electron main (renderer = the web app on loopback), the server-runtime artifact pipeline (the one-way-ABI answer), provisioning/safeStorage/auth seeding, chooser, thin-client, tray; issue cut #299→#304 |

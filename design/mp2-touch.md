@@ -1,5 +1,10 @@
 # MP2 — Touch-first conversation view (implementation spec)
 
+> **Shipped — an as-built record, not a plan.** MP2 shipped as **v0.22.0**.
+> This document explains what was built and why, which is what a design doc is
+> for; it is not a backlog. Open work lives on the issue board (`gh issue
+> list`), never here.
+
 Companion to [mobile-client.md](mobile-client.md) §MP2 and issue #376. MP1
 ([mp1-responsive-shell.md](mp1-responsive-shell.md)) shipped in v0.21.0;
 this round makes the phone shell it built pleasant to *use*. Decided with the
