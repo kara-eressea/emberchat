@@ -23,7 +23,11 @@ import {
   loadProfile,
   useProfileStore,
 } from "../../stores/profile.js";
-import { useSessionsStore, type DmView } from "../../stores/sessions.js";
+import {
+  useSessionsStore,
+  useUserPrefs,
+  type DmView,
+} from "../../stores/sessions.js";
 import { Avatar } from "../common/Avatar.js";
 import { PrivateNote } from "../profile/PrivateNote.js";
 import { DimChip, MatchPill, TierPie } from "../profile/MatchTier.js";
@@ -93,7 +97,10 @@ export function DmProfile({
   // The partner's name wears the chat's gender colour (#493), so the sidebar
   // head and their nick in the log beside it always agree.
   const accent = useNameColor(identityId, partner, response?.profile);
-  const status = dm.online ? dm.statusmsg : "";
+  // The DM partner is never you, so `showOthersStatus` applies
+  // unconditionally here (#585).
+  const showStatus = useUserPrefs().showOthersStatus;
+  const status = dm.online && showStatus ? dm.statusmsg : "";
   // Their wall clock, from the zone the user set for them or F-List's offset
   // (see lib/local-time.ts). Ticks off the one shared minute timer.
   const clock = localClock(

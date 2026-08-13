@@ -1729,7 +1729,10 @@ function SocialRow({
       {...press}
       title={
         character.online
-          ? `${character.status}${character.statusmsg ? ` — ${decodeWireEntities(character.statusmsg)}` : ""}`
+          ? // The hover tooltip is a status message like any other, so
+            // `showOthersStatus` hides it too — a friends row is never you
+            // (#585). The presence word stays.
+            `${character.status}${character.statusmsg && session.prefs.showOthersStatus ? ` — ${decodeWireEntities(character.statusmsg)}` : ""}`
           : "offline"
       }
     >

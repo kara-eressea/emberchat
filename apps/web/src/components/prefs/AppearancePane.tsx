@@ -6,6 +6,7 @@
 
 import { PREFS_DEFAULTS, UI_SCALE_STEPS } from "@emberchat/protocol";
 import { useSessionsStore } from "../../stores/sessions.js";
+import { useDeviceOverridesOn } from "../../stores/prefs-overrides.js";
 import { withoutEicon } from "../chat/eicon-lists.js";
 import { ACCENTS, type AccentId } from "../../theme/tokens.js";
 import {
@@ -16,7 +17,7 @@ import {
   Swatch,
   Toggle,
 } from "./controls.js";
-import { patchPrefs } from "./patch.js";
+import { patchPrefs, setAppearanceSync } from "./patch.js";
 import styles from "./prefs.module.css";
 
 export function AppearancePane({ identityId }: { identityId: string }) {
@@ -26,11 +27,31 @@ export function AppearancePane({ identityId }: { identityId: string }) {
   const set = (patch: Parameters<typeof patchPrefs>[1]) => {
     void patchPrefs(identityId, patch);
   };
+  const deviceOnly = useDeviceOverridesOn();
 
   return (
     <>
       <GroupLabel>Theme</GroupLabel>
-      <FieldRow label="Accent color" help="Synced across your devices">
+      <FieldRow
+        label="Sync appearance across devices"
+        help={
+          deviceOnly
+            ? "Off — the settings below apply to this device only. Turning it back on restores your synced appearance."
+            : "On — the settings below follow you to every device you sign in from"
+        }
+      >
+        <Toggle
+          label="Sync appearance across devices"
+          checked={!deviceOnly}
+          onChange={(sync) => {
+            setAppearanceSync(identityId, sync);
+          }}
+        />
+      </FieldRow>
+      <FieldRow
+        label="Accent color"
+        help={deviceOnly ? "This device only" : "Synced across your devices"}
+      >
         <div
           className={styles.swatchRow}
           role="radiogroup"
@@ -124,6 +145,32 @@ export function AppearancePane({ identityId }: { identityId: string }) {
           checked={prefs.sidebarAvatars}
           onChange={(sidebarAvatars) => {
             set({ sidebarAvatars });
+          }}
+        />
+      </FieldRow>
+
+      <FieldRow
+        label="Show character icons"
+        help="Off replaces every profile picture with the character's initial, and stops [icon] tags in messages and statuses from loading one"
+      >
+        <Toggle
+          label="Show character icons"
+          checked={prefs.showCharacterIcons}
+          onChange={(showCharacterIcons) => {
+            set({ showCharacterIcons });
+          }}
+        />
+      </FieldRow>
+
+      <FieldRow
+        label="Show other people's status messages"
+        help="Off hides them in member lists, headers and profiles. Your own status stays visible"
+      >
+        <Toggle
+          label="Show other people's status messages"
+          checked={prefs.showOthersStatus}
+          onChange={(showOthersStatus) => {
+            set({ showOthersStatus });
           }}
         />
       </FieldRow>
@@ -246,6 +293,7 @@ export function AppearancePane({ identityId }: { identityId: string }) {
           options={[
             { value: "inline", label: "Inline" },
             { value: "name", label: "Name only" },
+            { value: "off", label: "Off" },
           ]}
           value={prefs.eiconDisplay}
           onChange={(eiconDisplay) => {

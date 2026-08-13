@@ -31,7 +31,7 @@ import {
   type CardAnchor,
   type LoadedProfile,
 } from "../../stores/profile.js";
-import { useSessionsStore } from "../../stores/sessions.js";
+import { useSessionsStore, useUserPrefs } from "../../stores/sessions.js";
 import { RichText } from "../chat/RichText.js";
 import { Avatar } from "../common/Avatar.js";
 import { RateEditor } from "../ratings/RateEditor.js";
@@ -356,6 +356,9 @@ function CardContent({
   onMessage: (() => void) | undefined;
 }) {
   const response = loaded?.response;
+  // Your own status is never hidden by `showOthersStatus` (#585) — you have to
+  // be able to see what you are broadcasting.
+  const showStatus = useUserPrefs().showOthersStatus || self;
   const report: MatchReport | undefined = useMemo(
     () =>
       ownProfile && response ? match(ownProfile, response.profile) : undefined,
@@ -466,7 +469,7 @@ function CardContent({
         </div>
       </div>
       <div className={styles.cardBody} ref={bodyRef}>
-        {statusMessage && (
+        {statusMessage && showStatus && (
           // Render the chat BBCode subset the way the log and DM header do
           // (#210): [url], [eicon], [color] and friends must never show as raw
           // tags. The card has room for the full inline render; the title falls

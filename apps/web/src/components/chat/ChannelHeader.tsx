@@ -38,6 +38,7 @@ import { decodeWireEntities } from "../../lib/wire-text.js";
 import { useProfileStore, type CardAnchor } from "../../stores/profile.js";
 import {
   useSessionsStore,
+  useUserPrefs,
   type ChannelView,
   type DmView,
 } from "../../stores/sessions.js";
@@ -944,7 +945,10 @@ export function DmHeader({
   }
 
   const status = dm.online ? dm.status : "offline";
-  const hasTopic = dm.statusmsg !== "" || dm.status !== "";
+  // The DM partner is never you, so `showOthersStatus` applies unconditionally
+  // (#585). The presence word stays — it is not a message they wrote.
+  const showStatus = useUserPrefs().showOthersStatus;
+  const hasTopic = (dm.statusmsg !== "" && showStatus) || dm.status !== "";
 
   const rowRef = useRef<HTMLElement>(null);
   const present: HeaderControlId[] = [
@@ -968,7 +972,7 @@ export function DmHeader({
         const body = (
           <>
             <span className={styles.topicStatus}>{status}</span>
-            {dm.online && dm.statusmsg ? (
+            {dm.online && dm.statusmsg && showStatus ? (
               <>
                 {" — "}
                 <RichText bbcode={dm.statusmsg} />
