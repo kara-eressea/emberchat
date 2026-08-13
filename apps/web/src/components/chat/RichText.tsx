@@ -442,19 +442,36 @@ function LinkChip({ href, children }: { href: string; children?: ReactNode }) {
  * hotlinked + lazy like avatars. [icon] is the character's avatar and links
  * to their profile. A name outside the safe charset falls back to a chip.
  * Eicons obey the Appearance prefs (M5): display mode (inline vs name chip
- * with hover preview), the animate toggle (off = frozen first frame), and
- * the block list (chip, no preview — it outranks the display mode).
- * Right-clicking any eicon opens the favourite/block menu.
- * [icon] avatars are static images — the prefs don't apply.
+ * with hover preview vs off — the chip with no preview, #585), the animate
+ * toggle (off = frozen first frame), and the block list (chip, no preview —
+ * it outranks the display mode). Right-clicking any eicon opens the
+ * favourite/block menu.
+ *
+ * [icon] avatars used to be exempt from every preference; they now obey
+ * `showCharacterIcons` (#585), degrading to the same name chip an
+ * unrenderable name already falls back to. The profile link survives — the
+ * preference is about not showing the portrait, not about breaking the link.
  */
 function InlineIcon({ tag, name }: { tag: "icon" | "eicon"; name: string }) {
   const prefs = useUserPrefs();
   const src = tag === "eicon" ? eiconUrl(name) : avatarUrl(name);
-  if (src === undefined) {
-    return (
+  const hidden = tag === "icon" && !prefs.showCharacterIcons;
+  if (src === undefined || hidden) {
+    const chip = (
       <span className={styles.bodyCode} title={`[${tag}]`}>
         {name}
       </span>
+    );
+    return hidden ? (
+      <a
+        href={`https://www.f-list.net/c/${encodeURIComponent(name)}`}
+        target="_blank"
+        rel="noreferrer noopener"
+      >
+        {chip}
+      </a>
+    ) : (
+      chip
     );
   }
   if (tag === "icon") {
@@ -481,6 +498,12 @@ function InlineIcon({ tag, name }: { tag: "icon" | "eicon"; name: string }) {
   // preview on hover, which would defeat the block.
   if (hasEicon(prefs.eiconBlocked, name)) {
     return <EiconChip name={name} src={src} animate={false} blocked />;
+  }
+  // "off" is the blocked rendering without the blocked *meaning*: a plain
+  // chip that never previews. The name chip below still previews on hover,
+  // which is why "name" was never a way to stop seeing eicons (#585).
+  if (prefs.eiconDisplay === "off") {
+    return <EiconChip name={name} src={src} animate={false} preview={false} />;
   }
   if (prefs.eiconDisplay === "name") {
     return <EiconChip name={name} src={src} animate={prefs.animateEicons} />;
@@ -590,14 +613,19 @@ function EiconChip({
   src,
   animate,
   blocked = false,
+  preview = true,
 }: {
   name: string;
   src: string;
   animate: boolean;
   blocked?: boolean;
+  /** Blocked chips and the "off" display mode both suppress the reveal; only
+   * `blocked` also carries the blocked styling and title (#585). */
+  preview?: boolean;
 }) {
   const [shown, setShown] = useState(false);
   const noHover = useNoHover();
+  const revealable = preview && !blocked;
   // Either/or, never both: a tap on a touchscreen still fires the
   // compatibility mouseenter, so leaving the hover handlers wired alongside
   // the tap would have the enter open the preview and the click that follows
@@ -605,7 +633,7 @@ function EiconChip({
   // neither: its preview is suppressed in both directions.
   const hoverProps = {
     onMouseEnter: () => {
-      setShown(!blocked);
+      setShown(revealable);
     },
     onMouseLeave: () => {
       setShown(false);
@@ -620,7 +648,7 @@ function EiconChip({
       setShown((value) => !value);
     },
   };
-  const reveal = noHover ? (blocked ? {} : tapProps) : hoverProps;
+  const reveal = noHover ? (revealable ? tapProps : {}) : hoverProps;
   const press = useEiconPress(name);
   return (
     <span

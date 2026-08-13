@@ -29,7 +29,7 @@ import {
   useProfileStore,
   type LoadedProfile,
 } from "../../stores/profile.js";
-import { useSessionsStore } from "../../stores/sessions.js";
+import { useSessionsStore, useUserPrefs } from "../../stores/sessions.js";
 import { RichText } from "../chat/RichText.js";
 import { Avatar } from "../common/Avatar.js";
 import { CHOICES } from "./choices.js";
@@ -509,6 +509,14 @@ export function Header({
   const statusMessage = useSessionsStore((s) =>
     findStatusMessage(s.sessions[identityId], profile.name),
   );
+  // `showOthersStatus` never hides your own status (#585) — you have to be
+  // able to see what you are broadcasting.
+  const ownCharacter = useSessionsStore(
+    (s) => s.identities?.find((entry) => entry.id === identityId)?.name,
+  );
+  const showStatus =
+    useUserPrefs().showOthersStatus ||
+    profile.name.toLowerCase() === ownCharacter?.toLowerCase();
   const isFriend = social?.friends.some(
     (row) => row.name.toLowerCase() === profile.name.toLowerCase(),
   );
@@ -584,7 +592,7 @@ export function Header({
             ⚑
           </button>
         </div>
-        {statusMessage && (
+        {statusMessage && showStatus && (
           // Render the chat BBCode subset the way the mini card does (#210):
           // [url], [eicon], [color] must never show as raw tags. The title
           // falls back to flattened plain text for the hover tooltip —
