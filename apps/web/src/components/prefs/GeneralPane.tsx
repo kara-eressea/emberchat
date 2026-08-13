@@ -198,7 +198,8 @@ function ImagePreviewHosts({
         </div>
         <div className={styles.fieldHelp}>
           Previews load only for sites on this list — links from anywhere else
-          stay plain links you can open in a new tab.
+          stay plain links you can open in a new tab. A site covers its
+          subdomains too, so adding imgur.com also allows i.imgur.com.
         </div>
       </div>
       <div className={styles.hostEditorBody}>

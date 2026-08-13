@@ -19,6 +19,14 @@ export default tseslint.config(
       // electron-builder's output (MX4): an Electron runtime, an unpacked app
       // and the installers built from them. Derived, and none of it ours.
       "apps/desktop/release/**",
+      // Claude Code's per-repo state, including `.claude/worktrees/` — full
+      // checkouts of this monorepo living inside it. Flat config does not read
+      // `.gitignore`, so without this `eslint .` walks every worktree's source
+      // as if it were ours and dies of heap exhaustion on a machine that has a
+      // few of them. CI never saw it (fresh checkout); a local `pnpm lint` did.
+      // Prettier already skips them — since 3.0 it reads `.gitignore` by
+      // default, and this path is gitignored.
+      ".claude/**",
     ],
   },
   {

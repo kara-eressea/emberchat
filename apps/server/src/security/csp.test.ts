@@ -33,6 +33,13 @@ describe("contentSecurityDirectives (#335)", () => {
     }
   });
 
+  it("admits unpredictable CDN subdomains of a permitted host (#593)", () => {
+    // The reported case: a provider serving from per-CDN subdomains under a
+    // host the client's allowlist matcher has always accepted as a suffix.
+    expect(directives["img-src"]).toContain("https://*.pbs.twimg.com");
+    expect(directives["media-src"]).toContain("https://*.cdn.discordapp.com");
+  });
+
   it("permits the same hosts for <video> previews via media-src", () => {
     const mediaSrc = directives["media-src"];
     expect(mediaSrc).toContain("'self'");
@@ -50,7 +57,16 @@ describe("contentSecurityDirectives (#335)", () => {
 describe("mediaHostSources", () => {
   it("prefixes every default host with the https scheme", () => {
     for (const source of mediaHostSources()) {
-      expect(source).toMatch(/^https:\/\/[a-z0-9.-]+$/);
+      expect(source).toMatch(/^https:\/\/(?:\*\.)?[a-z0-9.-]+$/);
+    }
+  });
+
+  it("emits a subdomain wildcard beside each host (#593)", () => {
+    // Both forms are required: a CSP `*.example.com` matches any number of
+    // leading labels but never the apex.
+    for (const host of DEFAULT_IMAGE_PREVIEW_HOSTS) {
+      expect(mediaHostSources()).toContain(`https://${host}`);
+      expect(mediaHostSources()).toContain(`https://*.${host}`);
     }
   });
 });
@@ -132,11 +148,19 @@ describe("unionPreviewHosts (#342)", () => {
 describe("extraMediaSourceString (#342)", () => {
   it("emits https:// sources for user hosts not already shipped as defaults", () => {
     const source = extraMediaSourceString(["wimg.rule34.xxx", "new.example"]);
-    expect(source).toBe("https://wimg.rule34.xxx https://new.example");
+    expect(source).toBe(
+      "https://wimg.rule34.xxx https://*.wimg.rule34.xxx " +
+        "https://new.example https://*.new.example",
+    );
   });
 
   it("drops hosts already covered by the defaults so the header stays minimal", () => {
     expect(extraMediaSourceString(["imgur.com", "i.imgur.com"])).toBe("");
+  });
+
+  it("drops a user host the defaults now cover only through a wildcard (#593)", () => {
+    // `cdn.imgur.com` is on no list, but `imgur.com`'s wildcard admits it.
+    expect(extraMediaSourceString(["cdn.imgur.com"])).toBe("");
   });
 });
 
@@ -168,17 +192,22 @@ describe("ImagePreviewHostRegistry (#342)", () => {
 
     await registry.refresh();
     expect(registry.hosts()).toEqual(["one.example"]);
-    expect(registry.mediaSourceString()).toBe("https://one.example");
+    expect(registry.mediaSourceString()).toBe(
+      "https://one.example https://*.one.example",
+    );
 
     // A user edits their allowlist: nothing changes until we invalidate…
     docs = [{ imagePreviewHosts: ["one.example", "wimg.rule34.xxx"] }];
-    expect(registry.mediaSourceString()).toBe("https://one.example");
+    expect(registry.mediaSourceString()).toBe(
+      "https://one.example https://*.one.example",
+    );
 
     // …and the refresh hook (fired on the pref write) picks it up.
     await registry.refresh();
     expect(registry.hosts()).toEqual(["one.example", "wimg.rule34.xxx"]);
     expect(registry.mediaSourceString()).toBe(
-      "https://one.example https://wimg.rule34.xxx",
+      "https://one.example https://*.one.example " +
+        "https://wimg.rule34.xxx https://*.wimg.rule34.xxx",
     );
   });
 

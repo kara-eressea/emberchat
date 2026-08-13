@@ -88,9 +88,13 @@ export const IMAGE_PREVIEW_HOST =
 
 /** Default inline-image-preview allowlist: the known-good direct-image and
  * rewrite hosts. Previews only auto-load for a host on the user's list;
- * everything else stays a plain link (issue #215). Both apex and the `i.`/
- * `cdn.`/`media.` subdomains our rewrites can land on are listed so the
- * conservative default "just works" without relying on subdomain matching. */
+ * everything else stays a plain link (issue #215). An entry covers its
+ * subdomains as well as itself (#593), which makes the three entries whose
+ * apex is also listed (`i.imgur.com`, `i.gyazo.com`, `d.fixvx.com`) redundant
+ * — they stay because they document where our rewrites actually point, and
+ * removing entries would only churn the reset-to-defaults baseline. The rest
+ * are not redundant: nothing here lists `twimg.com`, `discordapp.com` or
+ * `f-list.net` as an apex, and none should be. */
 export const DEFAULT_IMAGE_PREVIEW_HOSTS = [
   "static.f-list.net",
   "imgur.com",
@@ -221,8 +225,10 @@ const prefsShape = {
   linkPreviewMode: z.enum(LINK_PREVIEW_MODES),
   /** Per-host allowlist for inline image previews (#215): a preview only
    * ever auto-loads when the media host is on this list — every other host
-   * stays a plain link. Defaults to DEFAULT_IMAGE_PREVIEW_HOSTS; the user
-   * adds/removes hosts in Preferences. Patches replace the whole array. */
+   * stays a plain link. An entry covers its subdomains too, so `twimg.com`
+   * admits whichever CDN subdomain a provider happens to serve from (#593).
+   * Defaults to DEFAULT_IMAGE_PREVIEW_HOSTS; the user adds/removes hosts in
+   * Preferences. Patches replace the whole array. */
   imagePreviewHosts: z
     .array(z.string().min(1).max(253).regex(IMAGE_PREVIEW_HOST))
     .max(100),
