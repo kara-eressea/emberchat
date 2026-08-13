@@ -15,13 +15,27 @@ A third-party web client + server ("bouncer") for **F-Chat**, the WebSocket chat
 - **Find something to look at later? File an issue.** Not a TODO comment, not a line in a design doc, not a paragraph appended to the tracker. A deferral that lives anywhere else is invisible to `gh issue list`, which means it is invisible. (Verified 2026-08-13: the repo has zero `TODO`/`FIXME` markers. Keep it that way.)
 - **Design docs explain, the board tracks.** `design/*.md` is for *why a thing is the way it is* — decisions, rationale, as-built notes. When a doc records something still to do, it should name the issue rather than restate the work. `design/milestones.md` tracks milestone progress and stops there.
 
+### Filing issues
+
+The board is only as useful as it is trustworthy, so these cut both ways — the first three get work *onto* it, the last two keep it from becoming a graveyard.
+
+- **The trigger is "not now", not "found".** Fixing it in the PR you are already writing? The PR is the record — no issue. Not fixing it now? File it before you forget, then get back to what you were doing.
+- **Never fix an incidental discovery inside an unrelated PR.** Noticing Y while doing X is the most common way a tight, reviewable PR becomes a sprawling one. File Y, finish X.
+- **A deferral in a comment must name its issue.** Comments explain why code is shaped as it is; they are not a backlog. A `deferred`/`for now` with no `#N` is exactly what hides work — #611 had to be excavated from a comment that said "captured so it is not rediscovered as a new bug", which is an issue's job written in the wrong place.
+- **What makes an issue worth filing:** the finding, where it lives (file and symbol), why it was not done now, and what the fix would be. Anything less is a note to yourself that nobody else — including you in three months — can act on.
+- **Do not file a wish with no failure mode**, and close `wontfix` freely. A board that only ever grows stops being a task board.
+
+Deliberately absent: any priority or severity ladder. `bug`/`enhancement`/`question` plus the `area:*` labels are enough at this size, and a P0–P3 scheme on a two-person project is ceremony that goes stale. Also absent: any "file before you start" rule — you would resent it on a one-line fix, and a rule people route around weakens the ones that matter.
+
 ### Sizing work: sub-issues under a milestone
 
 Established practice, so follow it rather than inventing a shape:
 
 - **A track gets a GitHub milestone and a package cut of issues** — one issue per landable package, dependency-ordered, each with its own PR. That is what WP-A/WP-B (#521/#522), MP1–MP4 (#375–#378), the MX milestone (#295→#306) and the UP-A…E cut in `design/uploads.md` all are.
 - **An issue that grows a package cut should be split** rather than grown. If a single issue's plan sprouts phases, cut it into sub-issues and open a milestone to hold them, leaving the original as the parent or closing it in favour of the cut. #580 → #585 + #581 + #580 is the worked example: the audit found two prerequisites hiding inside one toggle, and splitting them made each independently reviewable.
-- **Order the cut so each piece can land on `main` alone.** Stacked PRs are fine (base one branch on another; GitHub retargets as each merges), but each should still be green and shippable on its own.
+- **Order the cut so each piece can land on `main` alone.** Stacked PRs are fine — base one branch on another — but each should still be green and shippable on its own.
+- **Retarget a child PR to `main` *before* merging its parent.** Merging with `--delete-branch` removes the base branch a stacked PR points at, and GitHub does not reliably retarget: on 2026-08-13 it **closed** #600 outright when #599's branch went, and a closed PR can be neither reopened nor retargeted ("Cannot change the base branch of a closed pull request") — #600 had to be reopened as #624. One `gh pr edit <child> --base main` before merging the parent avoids it entirely.
+- **A squash merge rewrites the parent's commit hash**, so a stacked branch cannot simply merge `main` — it would carry a duplicate of work already landed. Replay it instead: `git rebase --onto main <parent-sha-before-merge> <branch>`, which is why the parent's SHA is worth recording before the merge rather than after.
 
 ## Dev environment
 
@@ -37,7 +51,7 @@ Established practice, so follow it rather than inventing a shape:
 | `design/decisions.md` | Locked architectural decisions (stack, tenancy, credentials, MVP scope) |
 | `design/architecture.md` | Monorepo layout, server/bouncer design, DB schema, client architecture, gateway protocol |
 | `design/milestones.md` | **Milestone status tracker** — open/closed milestones and their step checklists. Keep it updated as steps complete. It is *not* a backlog: open work lives on the issue board |
-| `design/milestone-*.md` | One file per milestone (1–10), dependency-ordered |
+| `design/milestone-8..11-*.md` | As-built records for the four milestones that carry detail not restated elsewhere. **M1–M7 had plan docs; they were deleted 2026-08-13** — forward-looking scope for long-shipped work, with everything durable in them already in `decisions.md`/`architecture.md`. The step checklists in `milestones.md` are what remains |
 | `design/standalone-client.md` | Desktop-client design (M7 step 8, in build as MX): embedded bouncer, session-library boundary (extracted at MX1), pglite, Electron |
 | `design/mx2-pglite-spike.md` | **MX2 spike findings** (#297) — pglite confirmed (PG 18.3, uuidv7 native, buildApp boots); the `Db` widening, fsync/no-lock caveats, `dumpDataDir()` backups, the #298 work map. Harnesses in `design/spikes/mx2-pglite/` |
 | `design/mx3-desktop-shell.md` | **MX3 implementation spec** — thin Electron main (renderer = the web app on loopback), the server-runtime artifact pipeline (the one-way-ABI answer), provisioning/safeStorage/auth seeding, chooser, thin-client, tray; issue cut #299→#304 |

@@ -1,5 +1,10 @@
 # MX4 — Packaging and the release train
 
+> **Shipped — an as-built record, not a plan.** MX4 is complete — both
+> installers ship from the release train. This document explains what was
+> built and why, which is what a design doc is for; it is not a backlog. Open
+> work lives on the issue board (`gh issue list`), never here.
+
 *Implementation spec + as-built, written 2026-08-05 alongside #305. Covers the
 one issue that turns MX3's running shell into two files a person can download:
 an unsigned macOS DMG and an unsigned Windows NSIS installer, attached to the

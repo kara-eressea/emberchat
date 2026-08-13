@@ -1,5 +1,10 @@
 # MP — Mobile web client (responsive/PWA)
 
+> **Shipped — an as-built record, not a plan.** The MP track is closed —
+> MP1–MP4 all shipped (v0.21.0–v0.23.0). This document explains what was built
+> and why, which is what a design doc is for; it is not a backlog. Open work
+> lives on the issue board (`gh issue list`), never here.
+
 **Closed track.** Planned 2026-07-23 with the user, built 2026-08-03/04:
 MP1 (v0.21.0), MP2 (v0.22.0), MP3 (v0.23.0), MP4 (tests and docs — no release
 of its own). The phone shell, its touch grammar, its install surface and its

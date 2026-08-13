@@ -1,5 +1,10 @@
 # MP3 — PWA plumbing (implementation spec)
 
+> **Shipped — an as-built record, not a plan.** MP3 shipped as **v0.23.0**.
+> This document explains what was built and why, which is what a design doc is
+> for; it is not a backlog. Open work lives on the issue board (`gh issue
+> list`), never here.
+
 Companion to [mobile-client.md](mobile-client.md) §MP3 and issue #377. MP1
 (v0.21.0) built the phone shell; MP2 (v0.22.0) made it touch-first. MP3 makes
 it installable: manifest, icons, safe areas, theme-color, and the lifecycle
