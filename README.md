@@ -24,7 +24,7 @@ On top of that foundation:
 - A **phone-sized client** (installable as a home-screen app) and a
   **desktop app** — same features everywhere
 
-> Status: **pre-1.0** (currently v0.27.0). The feature set is complete and
+> Status: **pre-1.0** (currently v0.28.0). The feature set is complete and
 > in daily use; what remains before 1.0 is confidence — real-device passes
 > and soak time. Expect the occasional rough edge.
 
