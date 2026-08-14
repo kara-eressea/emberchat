@@ -47,7 +47,7 @@ import { useOverridesStore } from "../stores/prefs-overrides.js";
  * title flash, in-page toast — but the OS-level one is out of reach without
  * either patching the server (and then having to restore it, which is the
  * bookkeeping this design exists to avoid) or teaching the sender about device
- * state. Worth settling deliberately rather than silently; see the PR.
+ * state. Filed as #630 rather than left as a note here.
  */
 export const SFW_PREFS: Partial<UserPrefs> = {
   showCharacterIcons: false,
