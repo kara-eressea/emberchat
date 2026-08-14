@@ -10,6 +10,7 @@ import { PREFS_DEFAULTS, type ServerFrame } from "@emberchat/protocol";
 // standalone spy keeps the assertions off `gateway.method` (unbound-method).
 const { markReadToLatest } = vi.hoisted(() => ({
   markReadToLatest: vi.fn(),
+  activity: vi.fn(),
 }));
 vi.mock("../gateway/socket.js", () => ({ gateway: { markReadToLatest } }));
 // dispatchFrame boots the theme (localStorage) on snapshot — stub it out in

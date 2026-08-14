@@ -56,8 +56,11 @@ export class GatewayHub {
   /** Bus unsubscribers per identity — called when a session is replaced. */
   readonly #sessionDetach = new Map<string, () => void>();
   /** Fired when an identity goes from zero subscribers to one — the
-   * detached-away restore hook (M5). Assigned in buildApp. */
+   * auto-away return hook (M5). Assigned in buildApp. */
   onFirstSubscribe?: (identityId: string) => void;
+  /** Fired when an attached browser reports user activity — the idle-away
+   * restore hook (#619). Assigned in buildApp. */
+  onActivity?: (identityId: string) => void;
 
   constructor(options: GatewayHubOptions) {
     this.#log = options.logger ?? NOOP_LOGGER;
@@ -154,6 +157,40 @@ export class GatewayHub {
   /** True while at least one browser is attached to the identity. */
   hasSubscribers(identityId: string): boolean {
     return (this.#subscribers.get(identityId)?.size ?? 0) > 0;
+  }
+
+  /** Relays an activity report to the away sweep (called per subscribed
+   * identity by the reporting connection). */
+  notifyActivity(identityId: string): void {
+    this.onActivity?.(identityId);
+  }
+
+  /**
+   * Pooled user activity across the identity's attached browsers (#619) —
+   * the answer to "is this identity idle", which no single device can give
+   * because F-Chat status is per character while activity is per device.
+   *
+   * - a number: every attached browser reports, and this is the newest of them
+   * - `"unknown"`: at least one attached browser has never reported (a client
+   *   older than the `activity` frame). The identity must not be judged idle:
+   *   an unreporting browser is not evidence of an absent user, and the safe
+   *   reading of "I cannot tell" is "do not touch their status"
+   * - `undefined`: nothing is attached — the detached path owns this case
+   */
+  activityAcross(identityId: string): number | "unknown" | undefined {
+    const set = this.#subscribers.get(identityId);
+    if (!set || set.size === 0) {
+      return undefined;
+    }
+    let newest = 0;
+    for (const connection of set) {
+      const at = connection.lastActivityAt;
+      if (at === undefined) {
+        return "unknown";
+      }
+      newest = Math.max(newest, at);
+    }
+    return newest;
   }
 
   unsubscribe(identityId: string, connection: GatewayConnection): void {

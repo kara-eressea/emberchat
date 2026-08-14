@@ -179,6 +179,20 @@ export class GatewayClient {
     }
   }
 
+  /**
+   * Reports that the user did something here (#619). The bouncer pools these
+   * across every device attached to an identity and decides auto-away from
+   * the newest of them, so a device that is merely open never speaks for a
+   * user who is typing on another one.
+   *
+   * Best-effort and unacked: a dropped report costs at most one sweep of
+   * lateness, and the reporter throttles hard (see lib/activity.ts) because
+   * the events behind it fire on every pointer move.
+   */
+  activity(): void {
+    this.#sendFrame({ t: "activity" });
+  }
+
   /** Sends a command; resolves with the server's ack. */
   cmd(command: GatewayCmd): Promise<AckResult> {
     if (this.#ws?.readyState !== WebSocket.OPEN) {
@@ -268,6 +282,12 @@ export class GatewayClient {
       for (const identityId of this.#subs) {
         this.#sendFrame({ t: "sub", d: { identityId } });
       }
+      // Opening the app is itself activity, and saying so seeds this
+      // connection's report (#619). Until a browser has reported once the
+      // bouncer refuses to judge its identity idle at all — so a tab opened
+      // and then abandoned without a single pointer move would otherwise
+      // hold the whole identity out of auto-away indefinitely.
+      this.activity();
       this.#pingTimer = setInterval(() => {
         this.#sendFrame({ t: "ping" });
         // Never push out a deadline already running — a wake probe's is

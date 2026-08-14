@@ -1333,6 +1333,56 @@ describe("gateway fan-out", () => {
     expect(app.gatewayHub.hasSubscribers(identityId)).toBe(true);
   });
 
+  it("pools activity reports from every attached browser (#619)", async () => {
+    // The wire half of shared activity sync: the frame reaches the connection,
+    // the hub reads the newest across devices, and the away hook is told at
+    // once rather than on the next sweep. (What the sweep then does with it is
+    // modules/away/auto-away.test.ts.)
+    const { identityId, token } = await createIdentity();
+    await startSession(identityId);
+    const laptop = await connectClient();
+    const phone = await connectClient();
+    await laptop.hello(token);
+    await phone.hello(token);
+    await laptop.subscribe(identityId);
+    await phone.subscribe(identityId);
+
+    // Attaching is itself a report — a browser that has never reported reads
+    // as "unknown" and holds the identity out of auto-away entirely, so the
+    // real client sends one on open. These test clients do not, hence the
+    // explicit frames below.
+    expect(app.gatewayHub.activityAcross(identityId)).toBe("unknown");
+
+    const notified: string[] = [];
+    const previous = app.gatewayHub.onActivity;
+    app.gatewayHub.onActivity = (id) => notified.push(id);
+    try {
+      laptop.send({ t: "activity" });
+      await vi.waitFor(() => {
+        expect(notified).toEqual([identityId]);
+      }, FRAME_WAIT_MS);
+      // Still unknown: the phone has not spoken, and its silence is not
+      // evidence about its user.
+      expect(app.gatewayHub.activityAcross(identityId)).toBe("unknown");
+
+      phone.send({ t: "activity" });
+      await vi.waitFor(() => {
+        expect(notified).toHaveLength(2);
+      }, FRAME_WAIT_MS);
+      const pooled = app.gatewayHub.activityAcross(identityId);
+      expect(typeof pooled).toBe("number");
+
+      // A ping is a timer, not a person: it must never pass for activity.
+      const beforePing = pooled;
+      laptop.send({ t: "ping" });
+      await laptop.nextOfType("pong");
+      expect(app.gatewayHub.activityAcross(identityId)).toBe(beforePing);
+      expect(notified).toHaveLength(2);
+    } finally {
+      app.gatewayHub.onActivity = previous;
+    }
+  });
+
   it("snapshots live channel state with unread and mention counts", async () => {
     const { identityId, token } = await createIdentity();
     const session = await startSession(identityId);
