@@ -384,6 +384,118 @@ describe("read-ack echo vs. live unread (#264)", () => {
   });
 });
 
+// #611: a message.new can, in principle, be dispatched before the
+// conversation.upsert that registers its convId → row mapping. The bump then
+// has no row to land on and no guard can help — the target does not exist —
+// so it is held and folded in when the row arrives. Every case below drives
+// the events in that order deliberately; the server's own ordering means it
+// is not what happens in practice, which is exactly why it needs a test.
+describe("a bump that arrives before its conversation row (#611)", () => {
+  const dmState = () =>
+    useSessionsStore.getState().sessions[IDENTITY]?.dms[CONV];
+
+  /** A snapshot carrying no conversations — the server's authoritative view. */
+  const seedSnapshot = () => {
+    useSessionsStore.getState().applySnapshot({
+      identityId: IDENTITY,
+      self: {
+        character: "Amber Vale",
+        sessionStatus: "online",
+        status: "online",
+        statusmsg: "",
+        ignores: [],
+        limits: {
+          chatMax: 4096,
+          privMax: 50000,
+          lfrpMax: 50000,
+          lfrpFlood: 600,
+        },
+        iconBlacklist: [],
+        chatop: false,
+        sendDelaySeconds: 0,
+        prefs: PREFS_DEFAULTS,
+        outbox: [],
+        campaign: null,
+        social: null,
+      },
+      channels: [],
+      dms: [],
+    });
+  };
+
+  it("lands on the channel row the upsert creates", () => {
+    const store = useSessionsStore.getState();
+    store.bumpUnread(IDENTITY, CONV, 101, true);
+    store.bumpUnread(IDENTITY, CONV, 102, false);
+    store.bumpHighlight(IDENTITY, CONV);
+    expect(channelState()).toBeUndefined(); // nowhere to land yet
+
+    store.applyConversation(IDENTITY, channelConversation(null));
+    const channel = channelState();
+    expect(channel?.unread).toBe(2);
+    expect(channel?.mentions).toBe(1);
+    expect(channel?.highlightedAt).toBeGreaterThan(0);
+    // Tracked as live, so the #264 read-cursor rule applies to it as it
+    // would have if the row had existed all along.
+    expect(channel?.newestMessageId).toBe(102);
+  });
+
+  it("lands on the DM row the upsert creates", () => {
+    const store = useSessionsStore.getState();
+    store.bumpUnread(IDENTITY, CONV, 205);
+    store.applyConversation(IDENTITY, pmConversation("Nyx Firemane"));
+    expect(dmState()?.unread).toBe(1);
+    expect(dmState()?.newestMessageId).toBe(205);
+  });
+
+  it("is dropped when the server's read cursor already covers it", () => {
+    // The upsert says the conversation is read through 300; a held bump for
+    // message 205 is a badge the user has demonstrably already cleared
+    // elsewhere, so folding it in would resurrect it.
+    const store = useSessionsStore.getState();
+    store.bumpUnread(IDENTITY, CONV, 205);
+    store.applyConversation(IDENTITY, channelConversation(300));
+    expect(channelState()?.unread).toBe(0);
+  });
+
+  it("is consumed once, not re-applied by later upserts", () => {
+    const store = useSessionsStore.getState();
+    store.bumpUnread(IDENTITY, CONV, 101);
+    store.applyConversation(IDENTITY, channelConversation(null));
+    expect(channelState()?.unread).toBe(1);
+    store.applyConversation(IDENTITY, channelConversation(null));
+    expect(channelState()?.unread).toBe(1);
+  });
+
+  it("is discarded by a snapshot, whose counts supersede it", () => {
+    const store = useSessionsStore.getState();
+    store.bumpUnread(IDENTITY, CONV, 101);
+    seedSnapshot();
+    store.applyConversation(IDENTITY, channelConversation(null));
+    expect(channelState()?.unread).toBe(0);
+  });
+
+  it("is discarded when the conversation goes away instead", () => {
+    const store = useSessionsStore.getState();
+    store.bumpUnread(IDENTITY, CONV, 101);
+    store.removeConversation(IDENTITY, CONV);
+    store.applyConversation(IDENTITY, channelConversation(null));
+    expect(channelState()?.unread).toBe(0);
+  });
+
+  it("holds bumps for a bounded number of unknown conversations", () => {
+    // The only writer is inbound traffic for a conversation this client has
+    // never heard of. Rare by the server's ordering, but not a map to leave
+    // growing on an untrusted count.
+    const store = useSessionsStore.getState();
+    for (let i = 0; i < 200; i += 1) {
+      store.bumpUnread(IDENTITY, `conv-${String(i)}`, 100 + i);
+    }
+    const held = useSessionsStore.getState().sessions[IDENTITY]?.pendingBumps;
+    expect(Object.keys(held ?? {})).toHaveLength(64);
+  });
+});
+
 // #515: the people sections sort on DM activity, so the store has to hold a
 // per-DM activity id that counts messages in BOTH directions and survives the
 // badge being cleared. Message ids are one global server-assigned sequence —
