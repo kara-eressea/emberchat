@@ -179,6 +179,15 @@ export class GatewayConnection {
   #frameWindowStart = 0;
   #framesInWindow = 0;
   readonly #maxBufferedBytes: number;
+  /**
+   * When this browser last reported user activity, or undefined if it never
+   * has (#619). The `undefined` state is load-bearing rather than a missing
+   * zero: a client too old to send the `activity` frame must not be read as
+   * "idle since it connected" and drag its identity away while its user is
+   * demonstrably typing. Nothing attached that has never reported means the
+   * idle sweep declines to judge at all — see GatewayHub.activityAcross.
+   */
+  #lastActivityAt: number | undefined;
 
   constructor(socket: WebSocket, ctx: GatewayConnectionContext) {
     this.#socket = socket;
@@ -226,6 +235,12 @@ export class GatewayConnection {
   /** True while this connection wants events for the identity. */
   isSubscribed(identityId: string): boolean {
     return this.#subscriptions.has(identityId);
+  }
+
+  /** Newest reported user activity, or undefined if this browser has never
+   * reported any (see #lastActivityAt). */
+  get lastActivityAt(): number | undefined {
+    return this.#lastActivityAt;
   }
 
   /** Hub fan-out entry point: buffers during snapshot/catchup, dedupes
@@ -339,6 +354,16 @@ export class GatewayConnection {
         return;
       case "ack":
         await this.#handleReadAck(frame.d);
+        return;
+      case "activity":
+        this.#lastActivityAt = Date.now();
+        // Tell the away sweep at once rather than letting it notice on its
+        // next pass: coming back from an automatic away is the half of the
+        // feature the user actually watches, and a minute of lag there is
+        // the difference between "it works" and "it is broken" (#619).
+        for (const identityId of this.#subscriptions.keys()) {
+          this.#ctx.hub.notifyActivity(identityId);
+        }
         return;
     }
   }

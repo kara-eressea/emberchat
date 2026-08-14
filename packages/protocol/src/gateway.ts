@@ -385,6 +385,13 @@ export const clientFrameSchema = z.discriminatedUnion("t", [
     }),
   }),
   z.object({ t: z.literal("ping") }),
+  // "The user did something here, just now." Reported by every attached
+  // browser so the bouncer — the only layer that sees all of a user's
+  // devices — can decide idleness for the identity as a whole (#619). It
+  // carries no timestamp deliberately: a client clock is not to be trusted,
+  // and "when the server heard it" is the quantity the sweep wants anyway.
+  // Distinct from `ping`, which a timer sends whether or not anyone is there.
+  z.object({ t: z.literal("activity") }),
 ]);
 
 export type ClientFrame = z.infer<typeof clientFrameSchema>;

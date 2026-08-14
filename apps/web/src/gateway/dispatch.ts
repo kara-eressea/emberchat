@@ -6,7 +6,6 @@
 
 import type { GatewayEvent, ServerFrame, UserPrefs } from "@emberchat/protocol";
 
-import { isAutoStatusInFlight } from "../lib/auto-away.js";
 import { previewText, showMessageNotification } from "../lib/desktop-notify.js";
 import { errNotice } from "../lib/err-codes.js";
 import { loadSocial } from "../lib/social.js";
@@ -393,18 +392,11 @@ function dispatchEvent(identityId: string, event: GatewayEvent): void {
       return;
     }
     case "error":
-      // An ERR arriving while one of our automatic auto-away STA sends is in
-      // flight is that send's rejection (typically the status cooldown) — ours
-      // to swallow and retry after the window, never the user's to see (#358).
-      // A manual status change leaves no in-flight guard, so its errors show.
-      if (isAutoStatusInFlight(identityId)) {
-        console.debug(
-          "auto-away: swallowing status error",
-          event.d.number,
-          event.d.message,
-        );
-        return;
-      }
+      // Status-cooldown ERRs used to need swallowing here: every browser ran
+      // its own auto-away, so their automatic STAs raced each other into
+      // F-Chat's five-second gate (#358). The client sends no automatic status
+      // changes any more (#619) — an ERR reaching this point is the user's.
+      //
       // Friendly copy for the codes users actually hit (M9); unknown
       // codes surface F-Chat's own message.
       sessions.applyNotice(

@@ -1,7 +1,9 @@
-// Detached auto-away integration (M5): real Postgres (testcontainers) +
+// Auto-away integration (M5 + #619): real Postgres (testcontainers) +
 // fchat-sim through the production path, with the sweep clock injected via
-// buildApp's test knob. The GatewayHub attach-hook mechanics and the sweep's
-// failure containment get their own container-free unit blocks at the bottom.
+// buildApp's test knob. Covers both questions the module answers — idle while
+// attached (pooled across devices) and fully detached. The GatewayHub hook
+// mechanics and the sweep's failure containment get their own container-free
+// unit blocks at the bottom.
 
 import { eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
@@ -19,7 +21,7 @@ import {
   type SessionLogger,
   type SessionRegistry,
 } from "@emberchat/session-engine";
-import { DetachedAway } from "./detached-away.js";
+import { AutoAway } from "./auto-away.js";
 import { GatewayHub } from "../gateway/gateway.js";
 import type { GatewayConnection } from "../gateway/connection.js";
 import type { HistorySink } from "../history/sink.js";
@@ -65,7 +67,7 @@ beforeAll(async () => {
       baseUrl: sim.httpUrl,
       minRequestIntervalMs: 0,
     }),
-    detachedAwayNow: () => fakeNow,
+    autoAwayNow: () => fakeNow,
     sessionTuning: { statusGateMs: 800 },
   });
 }, CONTAINER_BOOT_MS);
@@ -184,6 +186,157 @@ function setPrefs(userId: string, prefs: UserPrefsPatch): Promise<unknown> {
     });
 }
 
+/**
+ * A stand-in for an attached browser. The hub reads exactly one thing off a
+ * connection for this purpose — when it last reported user activity — so a
+ * mutable box is the whole device: assigning to it *is* the browser reporting.
+ */
+interface FakeBrowser {
+  lastActivityAt: number | undefined;
+}
+
+/** Attaches a fake browser to the identity and returns it plus its detach. */
+function attach(
+  identityId: string,
+  lastActivityAt: number | undefined,
+): { browser: FakeBrowser; detach: () => void } {
+  const browser: FakeBrowser = { lastActivityAt };
+  const connection = browser as unknown as GatewayConnection;
+  app.gatewayHub.subscribe(identityId, connection);
+  return {
+    browser,
+    detach: () => {
+      app.gatewayHub.unsubscribe(identityId, connection);
+    },
+  };
+}
+
+/** What the gateway does when an `activity` frame arrives. */
+function report(identityId: string, browser: FakeBrowser): void {
+  browser.lastActivityAt = fakeNow;
+  app.gatewayHub.notifyActivity(identityId);
+}
+
+describe("idle auto-away (pooled across devices)", () => {
+  it("goes away once every attached device has gone quiet", async () => {
+    const { identityId, userId, session } = await startIdentity();
+    await setPrefs(userId, {
+      autoAwayEnabled: true,
+      autoAwayMinutes: 1,
+      autoAwayMessage: "afk",
+    });
+    const laptop = attach(identityId, fakeNow);
+    const phone = attach(identityId, fakeNow);
+
+    fakeNow += 30_000;
+    await app.autoAway.sweep();
+    await expectOwnStatus(session, "online", ""); // under the threshold
+
+    fakeNow += MINUTE_MS;
+    await app.autoAway.sweep();
+    await expectOwnStatus(session, "away", "afk");
+
+    laptop.detach();
+    phone.detach();
+  });
+
+  it("one active device keeps the whole identity online", async () => {
+    // The #619 headline. A phone left face-down on a table is not evidence
+    // that its owner has stopped typing on the laptop — and before the
+    // bouncer pooled the reports, the phone's own idle timer would have
+    // awayed the character out from under them.
+    const { identityId, userId, session } = await startIdentity();
+    await setPrefs(userId, {
+      autoAwayEnabled: true,
+      autoAwayMinutes: 1,
+      autoAwayMessage: "afk",
+    });
+    const phone = attach(identityId, fakeNow); // set down, never touched again
+    const laptop = attach(identityId, fakeNow);
+
+    for (let minute = 0; minute < 5; minute += 1) {
+      fakeNow += MINUTE_MS;
+      report(identityId, laptop.browser); // still typing over here
+      await app.autoAway.sweep();
+    }
+    await expectOwnStatus(session, "online", "");
+
+    // The laptop goes quiet too — now nobody is there.
+    fakeNow += 2 * MINUTE_MS;
+    await app.autoAway.sweep();
+    await expectOwnStatus(session, "away", "afk");
+
+    // …and a single report from either device brings it straight back,
+    // without waiting for the next sweep.
+    fakeNow += 1_000;
+    report(identityId, phone.browser);
+    await expectOwnStatus(session, "online", "");
+
+    phone.detach();
+    laptop.detach();
+  });
+
+  it("declines to judge while a device that cannot report is attached", async () => {
+    // A client older than the `activity` frame reports nothing at all. Silence
+    // from it is not evidence of an absent user, so the safe reading is to
+    // leave the status alone entirely.
+    const { identityId, userId, session } = await startIdentity();
+    await setPrefs(userId, {
+      autoAwayEnabled: true,
+      autoAwayMinutes: 1,
+      autoAwayMessage: "afk",
+    });
+    const quiet = attach(identityId, fakeNow);
+    const oldClient = attach(identityId, undefined);
+
+    fakeNow += 10 * MINUTE_MS;
+    await app.autoAway.sweep();
+    await expectOwnStatus(session, "online", "");
+
+    // It disconnects; the remaining device's silence can now be trusted.
+    oldClient.detach();
+    await app.autoAway.sweep();
+    await expectOwnStatus(session, "away", "afk");
+
+    quiet.detach();
+  });
+
+  it("leaves the away in place when clear-on-return is off", async () => {
+    const { identityId, userId, session } = await startIdentity();
+    await setPrefs(userId, {
+      autoAwayEnabled: true,
+      autoAwayMinutes: 1,
+      autoAwayClearOnReturn: false,
+      autoAwayMessage: "afk",
+    });
+    const laptop = attach(identityId, fakeNow);
+
+    fakeNow += 2 * MINUTE_MS;
+    await app.autoAway.sweep();
+    await expectOwnStatus(session, "away", "afk");
+
+    // Returning forgets the record rather than restoring — the away is the
+    // user's to clear now, which is what the preference means.
+    fakeNow += 1_000;
+    report(identityId, laptop.browser);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    await expectOwnStatus(session, "away", "afk");
+
+    laptop.detach();
+  });
+
+  it("stays inert while the pref is off (the default)", async () => {
+    const { identityId, session } = await startIdentity();
+    const laptop = attach(identityId, fakeNow);
+
+    fakeNow += 24 * 60 * MINUTE_MS;
+    await app.autoAway.sweep();
+    await expectOwnStatus(session, "online", "");
+
+    laptop.detach();
+  });
+});
+
 describe("detached auto-away", () => {
   it("applies away past the threshold and hands back on attach", async () => {
     const { identityId, userId, session } = await startIdentity();
@@ -195,17 +348,17 @@ describe("detached auto-away", () => {
 
     // First subscriber-less sweep stamps the clock; the threshold counts
     // from there, not from some unobserved earlier moment.
-    await app.detachedAway.sweep();
+    await app.autoAway.sweep();
     fakeNow += 30_000;
-    await app.detachedAway.sweep();
+    await app.autoAway.sweep();
     expect(session.ownStatus.status).toBe("online");
 
     fakeNow += MINUTE_MS;
-    await app.detachedAway.sweep();
+    await app.autoAway.sweep();
     await expectOwnStatus(session, "away", "Watering the moss");
 
     // Attach: the bouncer's away hands back to what it replaced.
-    app.detachedAway.onAttach(identityId);
+    app.autoAway.onAttach(identityId);
     await expectOwnStatus(session, "online", "");
   });
 
@@ -217,18 +370,18 @@ describe("detached auto-away", () => {
     });
     await session.setStatus("busy", "renovating the terrarium");
 
-    await app.detachedAway.sweep();
+    await app.autoAway.sweep();
     fakeNow += 2 * MINUTE_MS;
-    await app.detachedAway.sweep();
+    await app.autoAway.sweep();
     await expectOwnStatus(session, "busy", "renovating the terrarium");
   });
 
   it("stays inert while the pref is off (the default)", async () => {
     const { session } = await startIdentity();
 
-    await app.detachedAway.sweep();
+    await app.autoAway.sweep();
     fakeNow += 24 * 60 * MINUTE_MS;
-    await app.detachedAway.sweep();
+    await app.autoAway.sweep();
     await expectOwnStatus(session, "online", "");
   });
 
@@ -261,13 +414,13 @@ describe("detached auto-away", () => {
       }
     });
 
-    await app.detachedAway.sweep();
+    await app.autoAway.sweep();
     fakeNow += 2 * MINUTE_MS;
-    await app.detachedAway.sweep();
+    await app.autoAway.sweep();
     await expectOwnStatus(session, "away", "Watering the moss");
 
     // Straight back — well inside the gate.
-    app.detachedAway.onAttach(identityId);
+    app.autoAway.onAttach(identityId);
     await expectOwnStatus(session, "online", ""); // accepted at once
     expect(restored).toEqual([]); // …but not yet on the wire
     // Poll rather than sleeping out a wall-clock constant: the gate's release
@@ -287,14 +440,14 @@ describe("detached auto-away", () => {
       detachedAwayMinutes: 1,
       autoAwayMessage: "afk",
     });
-    await app.detachedAway.sweep();
+    await app.autoAway.sweep();
     fakeNow += 2 * MINUTE_MS;
-    await app.detachedAway.sweep();
+    await app.autoAway.sweep();
     await expectOwnStatus(session, "away", "afk");
 
     // A manual STA between our away and the attach: theirs wins.
     await session.setStatus("looking", "back, and looking");
-    app.detachedAway.onAttach(identityId);
+    app.autoAway.onAttach(identityId);
     await new Promise((resolve) => setTimeout(resolve, 200));
     await expectOwnStatus(session, "looking", "back, and looking");
   });
@@ -308,16 +461,16 @@ describe("detached auto-away lifecycle", () => {
       detachedAwayMinutes: 1,
       autoAwayMessage: "afk",
     });
-    await app.detachedAway.sweep();
+    await app.autoAway.sweep();
     fakeNow += 2 * MINUTE_MS;
-    await app.detachedAway.sweep();
+    await app.autoAway.sweep();
     await expectOwnStatus(session, "away", "afk");
 
     // Explicit disconnect → later reconnect: the fresh session starts
     // plain "online" and there is nothing to restore — a stale applied
     // record must not block going away again.
     app.sessions.stop(identityId);
-    await app.detachedAway.sweep(); // prunes the dead session's state
+    await app.autoAway.sweep(); // prunes the dead session's state
     const restarted = app.sessions.start({
       identityId,
       character: CHARACTER,
@@ -325,9 +478,9 @@ describe("detached auto-away lifecycle", () => {
       accountName: ACCOUNT,
     });
     await waitForOnline(restarted);
-    await app.detachedAway.sweep(); // stamps a fresh detachment clock
+    await app.autoAway.sweep(); // stamps a fresh detachment clock
     fakeNow += 2 * MINUTE_MS;
-    await app.detachedAway.sweep();
+    await app.autoAway.sweep();
     await expectOwnStatus(restarted, "away", "afk");
   });
 
@@ -338,13 +491,13 @@ describe("detached auto-away lifecycle", () => {
 
     // The ceiling needs no prefs — it is the operator's knob, applied even
     // with detached-away off (the default from registerUser).
-    await app.detachedAway.sweep(); // stamps the detachment clock
+    await app.autoAway.sweep(); // stamps the detachment clock
     fakeNow += 71 * 60 * MINUTE_MS;
-    await app.detachedAway.sweep();
+    await app.autoAway.sweep();
     expect(session.status).toBe("online"); // under the ceiling — untouched
 
     fakeNow += 2 * 60 * MINUTE_MS; // 73h total
-    await app.detachedAway.sweep();
+    await app.autoAway.sweep();
     expect(session.status).toBe("stopped");
     expect(app.sessions.get(identityId)).toBeUndefined();
     expect(events.at(-1)).toEqual({
@@ -378,6 +531,28 @@ describe("GatewayHub attach hook", () => {
     hub.subscribe("i", a); // zero→one again
     expect(fired).toEqual(["i", "i"]);
   });
+
+  it("pools activity across subscribers, and reports 'unknown' for a silent one", () => {
+    const hub = new GatewayHub({ history: fakeHistory });
+    const laptop = { lastActivityAt: 100 } as unknown as GatewayConnection;
+    const phone = { lastActivityAt: 400 } as unknown as GatewayConnection;
+    const oldClient = {
+      lastActivityAt: undefined,
+    } as unknown as GatewayConnection;
+
+    expect(hub.activityAcross("i")).toBeUndefined(); // nothing attached
+    hub.subscribe("i", laptop);
+    expect(hub.activityAcross("i")).toBe(100);
+    hub.subscribe("i", phone);
+    expect(hub.activityAcross("i")).toBe(400); // the newest wins
+
+    // One device that has never reported poisons the answer: silence from a
+    // client that cannot speak is not evidence of an absent user.
+    hub.subscribe("i", oldClient);
+    expect(hub.activityAcross("i")).toBe("unknown");
+    hub.unsubscribe("i", oldClient);
+    expect(hub.activityAcross("i")).toBe(400);
+  });
 });
 
 describe("sweep failure containment", () => {
@@ -408,7 +583,7 @@ describe("sweep failure containment", () => {
       status: "online",
       ownStatus: { status: "online", statusmsg: "" },
     };
-    const away = new DetachedAway({
+    const away = new AutoAway({
       db: failingDb(new Error("connect ECONNREFUSED")),
       sessions: {
         entries: () => [["identity-1", session]],
@@ -420,7 +595,7 @@ describe("sweep failure containment", () => {
     // First pass only stamps the detachment; the second reaches the query.
     await expect(away.sweep()).resolves.toBeUndefined();
     await expect(away.sweep()).resolves.toBeUndefined();
-    expect(logged).toContain("detached-away sweep failed");
+    expect(logged).toContain("auto-away sweep failed");
 
     // And the overlap guard is released, so the next tick still runs.
     await expect(away.sweep()).resolves.toBeUndefined();

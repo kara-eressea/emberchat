@@ -12,7 +12,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, useLocation, useParams } from "react-router";
 import { gateway } from "../../gateway/socket.js";
-import { startAutoAway } from "../../lib/auto-away.js";
+import { startActivityReporting } from "../../lib/activity.js";
 import { syncPushSubscription } from "../../lib/push.js";
 import {
   identityPath,
@@ -149,9 +149,10 @@ export function AppShell() {
     void useRatingsStore.getState().load();
   }, []);
 
-  // Idle detection lives with the shell: it exists exactly while the user
-  // is in the app, across identity/conversation navigation.
-  useEffect(() => startAutoAway(), []);
+  // Activity reporting lives with the shell: it exists exactly while the user
+  // is in the app, across identity/conversation navigation. The bouncer turns
+  // these reports into auto-away (#619); nothing here decides a status.
+  useEffect(() => startActivityReporting(), []);
 
   // Same lifetime for window focus (#440) — the read paths below and in
   // gateway/dispatch read it from the ui store.
