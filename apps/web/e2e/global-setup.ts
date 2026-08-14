@@ -103,8 +103,10 @@ async function assertApiPortFree(): Promise<void> {
       "Most likely a bouncer from an interrupted run is still alive: stop it " +
       "(lsof -ti tcp:" +
       String(API_PORT) +
-      " | xargs kill), or point this run at a free range with E2E_API_PORT / " +
-      "E2E_WEB_PORT.",
+      " | xargs kill).\n" +
+      "Another working copy is not the cause — since #617 each copy derives " +
+      "its own ports from its path. A second run of THIS copy is, and needs " +
+      "an explicit range: E2E_API_PORT / E2E_WEB_PORT.",
   );
 }
 

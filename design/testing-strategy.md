@@ -29,7 +29,7 @@ Scenario scripts (JSON fixtures) cover: flood ERRs, mid-session disconnects, tic
 **E2E (Playwright)** — web + server + sim + Postgres:
 - M1 slice: register → login → connect identity → join → chat → PM → history scroll.
 - Later: multi-tab sync, identity switch, delayed-send recall, highlight → notification.
-- The stack's fixed ports (API 39311, Vite 39312) are overridable via `E2E_API_PORT` / `E2E_WEB_PORT` — set both to run two working copies concurrently. Sim and Postgres already take free ports.
+- The stack's ports are **derived from the working copy's path** (#617), so two checkouts run the suite concurrently without either being told to pick a range; a given copy always gets the same ports, which keeps the `lsof` in global-setup's error message pasteable. `E2E_API_PORT` / `E2E_WEB_PORT` / `E2E_PREVIEW_PORT` still override, and are what a *second run of the same copy* needs. Sim and Postgres already take free ports.
 
 ## Live F-Chat testing — be a good citizen
 

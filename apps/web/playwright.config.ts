@@ -2,6 +2,8 @@
 // built server process are booted in global-setup; the vite dev server below
 // proxies /api to that server (same-origin, like production).
 
+import { createHash } from "node:crypto";
+import { fileURLToPath } from "node:url";
 import { defineConfig, devices } from "@playwright/test";
 
 function envPort(name: string, fallback: number): number {
@@ -16,14 +18,43 @@ function envPort(name: string, fallback: number): number {
   return port;
 }
 
-// Overridable so two working copies (parallel worktrees) can run the suite at
-// the same time instead of the second colliding with the first's stack. The
-// other two ports are already collision-free: fchat-sim binds 0 and
+// Two working copies must be able to run the suite at once. That was already
+// possible via the env overrides below, but only by picking a free range by
+// hand (#617) — so the defaults are now derived from this copy's own path
+// instead of being the same two numbers everywhere.
+//
+// Deliberately a hash rather than a probe-for-a-free-port: the ports are
+// module-level constants that `defineConfig` and global-setup both read, so
+// resolving them would mean async work at config load. Deriving them keeps it
+// synchronous and, more usefully, *stable* — a given checkout always gets the
+// same ports, so the `lsof` in global-setup's error message stays copy-and-
+// pasteable and a stale bouncer is findable tomorrow.
+//
+// The block sits below the ephemeral range macOS allocates from (49152+), and
+// the stride leaves a spare port per copy for whatever comes next. Two copies
+// colliding needs a hash collision across 400 slots; the fail-fast guard in
+// global-setup still catches it and says what to do.
+const PORT_BLOCK_START = 39_000;
+const PORT_BLOCK_SLOTS = 400;
+const PORTS_PER_COPY = 4;
+
+function derivedPortBase(): number {
+  // apps/web/ of this checkout — distinct per working copy, and unchanged
+  // across runs of the same one.
+  const here = fileURLToPath(new URL(".", import.meta.url));
+  const slot = createHash("sha256").update(here).digest().readUInt16BE(0);
+  return PORT_BLOCK_START + (slot % PORT_BLOCK_SLOTS) * PORTS_PER_COPY;
+}
+
+const PORT_BASE = derivedPortBase();
+
+// The other two are already collision-free: fchat-sim binds 0 and
 // testcontainers maps Postgres to a free host port.
-export const API_PORT = envPort("E2E_API_PORT", 39311);
-export const WEB_PORT = envPort("E2E_WEB_PORT", 39312);
+export const API_PORT = envPort("E2E_API_PORT", PORT_BASE);
+export const WEB_PORT = envPort("E2E_WEB_PORT", PORT_BASE + 1);
 // `vite preview` serving apps/web/dist — the bundle a self-host actually
 // ships. The Firefox caret project runs against this one (see below).
+// Derived from WEB_PORT so an explicit override shifts this with it.
 export const PREVIEW_PORT = envPort("E2E_PREVIEW_PORT", WEB_PORT + 1);
 
 /** The phone-device slice, named once: the mobile project claims it and the
