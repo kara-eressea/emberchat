@@ -131,6 +131,21 @@ export interface IdentitySession {
   dms: Record<string, DmView>;
   /** convId → channel key, for events keyed the other way around. */
   channelByConvId: Record<string, string>;
+  /**
+   * Bumps for a conversation whose row has not arrived yet (#611), keyed by
+   * convId and folded in by `applyConversation` the moment one does.
+   *
+   * The mapping above is registered by `conversation.upsert`, which rides a
+   * separate gateway event from `message.new`. The server orders the upsert
+   * (channel `JCH` / `pm.open`) ahead of any message, so the window is not
+   * observed in practice — but a bump arriving inside it has no row to land
+   * on, and a guard cannot help with that: the target does not exist yet.
+   * Holding the bump until it does is the only shape that works.
+   *
+   * Optional, like `syncedPrefs`: this is internal machinery no hand-built
+   * test fixture should have to know about, and absent simply means none.
+   */
+  pendingBumps?: Record<string, PendingBump>;
   /** Snapshot received — the sidebar can render. */
   synced: boolean;
   /** Latest transient global SYS / ERR, surfaced as a dismissable strip. */
@@ -141,6 +156,18 @@ export interface IdentitySession {
   /** Bookmarks/friends/requests (M6 step 7), lazily loaded through the
    * social REST endpoint (loadSocial). Absent until first fetched. */
   social?: SocialData;
+}
+
+/**
+ * Counters held for a conversation the client cannot address yet (#611).
+ * Mirrors exactly the fields `bumpUnread`/`bumpHighlight` would have written.
+ */
+export interface PendingBump {
+  unread: number;
+  mentions: number;
+  highlightedAt: number;
+  /** Newest live messages.id counted here — the read-cursor test (#264). */
+  newestMessageId: number;
 }
 
 /** One friend or bookmark row, presence-enriched by the server. */
@@ -459,6 +486,7 @@ function emptySession(identityId: string): IdentitySession {
     channels: {},
     dms: {},
     channelByConvId: {},
+    pendingBumps: {},
     invites: [],
     synced: false,
   };
@@ -581,6 +609,69 @@ function cursorClearsBadges(
     return false;
   }
   return newest === null || next >= newest;
+}
+
+/**
+ * How many unaddressable conversations may hold bumps at once (#611). The
+ * only writer is a `message.new` for a conversation this client has never
+ * heard of, which the server's ordering makes rare — but an unbounded map fed
+ * by inbound traffic is not a thing to leave open, and losing a badge on the
+ * hundredth simultaneously-unknown conversation is the failure this whole
+ * mechanism exists to make rare, not one worth growing without limit for.
+ */
+const MAX_PENDING_BUMPS = 64;
+
+/** Records a bump that has no row to land on yet, merging into any already
+ * held for the conversation. Unchanged session when the map is full. */
+function withPendingBump(
+  session: IdentitySession,
+  convId: string,
+  bump: {
+    unread?: number;
+    mention?: boolean;
+    messageId?: number;
+    highlight?: boolean;
+  },
+): IdentitySession {
+  const pendingBumps = session.pendingBumps ?? {};
+  const held = pendingBumps[convId];
+  if (
+    held === undefined &&
+    Object.keys(pendingBumps).length >= MAX_PENDING_BUMPS
+  ) {
+    return session;
+  }
+  const base = held ?? {
+    unread: 0,
+    mentions: 0,
+    highlightedAt: 0,
+    newestMessageId: 0,
+  };
+  return {
+    ...session,
+    pendingBumps: {
+      ...pendingBumps,
+      [convId]: {
+        unread: saturate(base.unread + (bump.unread ?? 0)),
+        mentions: saturate(base.mentions + (bump.mention ? 1 : 0)),
+        highlightedAt: bump.highlight ? Date.now() : base.highlightedAt,
+        newestMessageId: Math.max(base.newestMessageId, bump.messageId ?? 0),
+      },
+    },
+  };
+}
+
+/** Drops a conversation's held bumps; unchanged session when it held none. */
+function withoutPendingBump(
+  session: IdentitySession,
+  convId: string,
+): IdentitySession {
+  if (session.pendingBumps?.[convId] === undefined) {
+    return session;
+  }
+  const pendingBumps = { ...session.pendingBumps };
+  delete pendingBumps[convId];
+  return { ...session, pendingBumps };
 }
 
 /**
@@ -810,6 +901,9 @@ export const useSessionsStore = create<SessionsState>()((set, get) => {
         channels,
         dms,
         channelByConvId,
+        // The snapshot carries the server's own counts for every conversation
+        // it knows about, so anything held from before it is superseded (#611).
+        pendingBumps: {},
         synced: true,
         // Server-cached social lists ride the snapshot (#194) — a fresh
         // device renders bookmarks/friends without any REST fetch. No
@@ -908,6 +1002,16 @@ export const useSessionsStore = create<SessionsState>()((set, get) => {
 
     applyConversation(identityId, conversation) {
       patch(identityId, (session) => {
+        // Bumps that arrived before this row existed (#611). Folded in below
+        // rather than dropped — this event is the first moment the client can
+        // address the conversation at all, and the counters are only stale if
+        // the server's own read cursor has already passed them, which is
+        // exactly what `stale` tests.
+        const pending = session.pendingBumps?.[conversation.id];
+        const stale =
+          pending !== undefined &&
+          pending.newestMessageId <= (conversation.lastReadMessageId ?? 0);
+        const held = stale ? undefined : pending;
         if (conversation.kind === "channel") {
           const key = conversation.channelKey ?? "";
           const existing = session.channels[key];
@@ -937,40 +1041,59 @@ export const useSessionsStore = create<SessionsState>()((set, get) => {
                 lastReadMessageId: conversation.lastReadMessageId,
                 newestMessageId: null,
               };
+          if (held) {
+            channel.unread = saturate(channel.unread + held.unread);
+            channel.mentions = saturate(channel.mentions + held.mentions);
+            channel.highlightedAt = Math.max(
+              channel.highlightedAt,
+              held.highlightedAt,
+            );
+            channel.newestMessageId = Math.max(
+              channel.newestMessageId ?? 0,
+              held.newestMessageId,
+            );
+          }
           // The read cursor moved (this tab's ack or another's): drop the
           // badges — but only once the cursor has caught up to the newest
           // live message. A slow read-ack echo below a message that already
           // bumped unread must not wipe that genuinely-unread line (#264).
+          // Tested against the folded value, so a held bump counts as a live
+          // message here exactly as it would have if its row had existed.
           if (
             existing &&
             cursorClearsBadges(
               existing.lastReadMessageId,
               conversation.lastReadMessageId,
-              existing.newestMessageId,
+              channel.newestMessageId,
             )
           ) {
             channel.unread = 0;
             channel.mentions = 0;
             channel.highlightedAt = 0;
           }
-          return {
-            ...session,
-            channels: { ...session.channels, [key]: channel },
-            channelByConvId: {
-              ...session.channelByConvId,
-              [conversation.id]: key,
+          return withoutPendingBump(
+            {
+              ...session,
+              channels: { ...session.channels, [key]: channel },
+              channelByConvId: {
+                ...session.channelByConvId,
+                [conversation.id]: key,
+              },
             },
-          };
+            conversation.id,
+          );
         }
         // For PMs the joined flag is the "window open" bit: pm.close drops
         // it (fan-out and ack both land here), removing the DM everywhere.
         if (!conversation.joined) {
+          // A close discards anything held for it too: there is no row left
+          // for the bump to land on and none is coming.
           if (!(conversation.id in session.dms)) {
-            return session;
+            return withoutPendingBump(session, conversation.id);
           }
           const dms = { ...session.dms };
           delete dms[conversation.id];
-          return { ...session, dms };
+          return withoutPendingBump({ ...session, dms }, conversation.id);
         }
         const existing = session.dms[conversation.id];
         // Serve-time presence (pm.open) seeds a fresh row's dot immediately
@@ -988,13 +1111,6 @@ export const useSessionsStore = create<SessionsState>()((set, get) => {
                     status: presence.status,
                     statusmsg: presence.statusmsg,
                   }
-                : {}),
-              ...(cursorClearsBadges(
-                existing.lastReadMessageId,
-                conversation.lastReadMessageId,
-                existing.newestMessageId,
-              )
-                ? { unread: 0, highlightedAt: 0 }
                 : {}),
             }
           : {
@@ -1016,7 +1132,31 @@ export const useSessionsStore = create<SessionsState>()((set, get) => {
               // existing row keeps the value it already holds (spread above).
               lastActivityId: 0,
             };
-        return { ...session, dms: { ...session.dms, [conversation.id]: dm } };
+        if (held) {
+          dm.unread = saturate(dm.unread + held.unread);
+          dm.highlightedAt = Math.max(dm.highlightedAt, held.highlightedAt);
+          dm.newestMessageId = Math.max(
+            dm.newestMessageId ?? 0,
+            held.newestMessageId,
+          );
+        }
+        // Same #264 rule as the channel branch above, and for the same reason
+        // read against the folded newestMessageId.
+        if (
+          existing &&
+          cursorClearsBadges(
+            existing.lastReadMessageId,
+            conversation.lastReadMessageId,
+            dm.newestMessageId,
+          )
+        ) {
+          dm.unread = 0;
+          dm.highlightedAt = 0;
+        }
+        return withoutPendingBump(
+          { ...session, dms: { ...session.dms, [conversation.id]: dm } },
+          conversation.id,
+        );
       });
     },
 
@@ -1024,6 +1164,8 @@ export const useSessionsStore = create<SessionsState>()((set, get) => {
       // A channel leave/close removes the row outright (#327). Channels are
       // keyed by their channel key, so resolve convId → key first; DMs are
       // keyed by convId directly. Idempotent: a row already gone is a no-op.
+      // Any bumps held for the conversation go with it (#611) — including on
+      // the no-row path, where they are all that is left of it.
       patch(identityId, (session) => {
         const key = session.channelByConvId[convId];
         if (key !== undefined && session.channels[key]) {
@@ -1031,14 +1173,17 @@ export const useSessionsStore = create<SessionsState>()((set, get) => {
           delete channels[key];
           const channelByConvId = { ...session.channelByConvId };
           delete channelByConvId[convId];
-          return { ...session, channels, channelByConvId };
+          return withoutPendingBump(
+            { ...session, channels, channelByConvId },
+            convId,
+          );
         }
         if (convId in session.dms) {
           const dms = { ...session.dms };
           delete dms[convId];
-          return { ...session, dms };
+          return withoutPendingBump({ ...session, dms }, convId);
         }
-        return session;
+        return withoutPendingBump(session, convId);
       });
     },
 
@@ -1256,20 +1401,10 @@ export const useSessionsStore = create<SessionsState>()((set, get) => {
 
     bumpUnread(identityId, convId, messageId, mention = false) {
       patch(identityId, (session) => {
-        // KNOWN LIMITATION (pre-existing, #269 item 5): a message.new whose
-        // convId has no channelByConvId mapping and no dms[] row yet is
-        // dropped by the final `return session` below. The mapping is only
-        // registered by the conversation.upsert action, which rides a
-        // separate gateway event; if a message.new for a conversation is
-        // dispatched before its upsert lands, this bump has nowhere to go.
-        // In practice the server orders the upsert (channel JCH / pm.open)
-        // ahead of any message, so the window is not observed. A real fix is
-        // structural — it needs a per-session buffer of pending (convId →
-        // {unread, mentions, newestMessageId}) bumps, flushed into the
-        // channel/DM row inside conversation.upsert when the mapping first
-        // registers — not a guard we can add here, since the target row does
-        // not exist. Deferred deliberately; captured so it is not rediscovered
-        // as a new bug.
+        // A convId with no channelByConvId mapping and no dms[] row is a
+        // conversation whose `conversation.upsert` has not landed yet; the
+        // bump is held in pendingBumps and folded in by applyConversation
+        // when it does (#611, the fall-through at the end of this function).
         //
         // Live bumps saturate exactly where the server's counts do (#582), so
         // a long-attached session and a fresh snapshot of the same
@@ -1310,7 +1445,11 @@ export const useSessionsStore = create<SessionsState>()((set, get) => {
             },
           };
         }
-        return session;
+        return withPendingBump(session, convId, {
+          unread: 1,
+          mention,
+          messageId,
+        });
       });
     },
 
@@ -1334,7 +1473,7 @@ export const useSessionsStore = create<SessionsState>()((set, get) => {
             dms: { ...session.dms, [convId]: { ...dm, highlightedAt: stamp } },
           };
         }
-        return session;
+        return withPendingBump(session, convId, { highlight: true });
       });
     },
 
