@@ -198,6 +198,9 @@ cmd      { identityId, action, d }           # action ∈ 'msg.send' {convId, ma
                                              #   'session.connect'/'session.disconnect'
 ack      { identityId, convId, messageId }   # advance read cursor (drives unread counters everywhere)
 ping     {}
+activity {}                                  # "the user did something here, just now" — pooled across the
+                                             #   identity's devices to decide auto-away (decisions.md §10, #619).
+                                             #   Deliberately not `ping`: that one is a timer, not a person
 ```
 
 Server→client:

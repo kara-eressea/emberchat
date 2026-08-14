@@ -11,7 +11,7 @@ import { inArray, and, eq } from "drizzle-orm";
 import type { FastifyBaseLogger } from "fastify";
 import type { Db } from "../../db/index.js";
 import { identities } from "../../db/schema.js";
-import type { DetachedAway } from "../away/detached-away.js";
+import type { AutoAway } from "../away/auto-away.js";
 import type { HistorySink } from "../history/sink.js";
 import type {
   CredentialVault,
@@ -25,7 +25,7 @@ export interface BootResumeDeps {
   vault: CredentialVault;
   sessions: SessionRegistry;
   history: HistorySink;
-  detachedAway: DetachedAway;
+  autoAway: AutoAway;
   logger: FastifyBaseLogger;
   /** The detached-disconnect ceiling in ms; 0 = no ceiling. */
   disconnectAfterMs: number;
@@ -104,7 +104,7 @@ export async function resumeStoredSessions(
       });
       if (detachedAtMs !== undefined) {
         // The ceiling keeps counting from the pre-restart detach.
-        deps.detachedAway.seedDetachment(identity.id, detachedAtMs);
+        deps.autoAway.seedDetachment(identity.id, detachedAtMs);
       }
       resumed += 1;
     } catch (error) {

@@ -21,7 +21,7 @@ import { authRoutes } from "./modules/auth/routes.js";
 import { CampaignScheduler } from "./modules/campaigns/scheduler.js";
 import { ratingsRoutes } from "./modules/ratings/routes.js";
 import { SessionJanitor } from "./modules/auth/session-janitor.js";
-import { DetachedAway } from "./modules/away/detached-away.js";
+import { AutoAway } from "./modules/away/auto-away.js";
 import {
   ChannelDirectory,
   type ChannelDirectoryOptions,
@@ -76,7 +76,7 @@ declare module "fastify" {
     history: HistorySink;
     notifications: NotificationStore;
     outbox: Outbox;
-    detachedAway: DetachedAway;
+    autoAway: AutoAway;
     directory: ChannelDirectory;
     imagePreviewHosts: ImagePreviewHostRegistry;
     gatewayHub: GatewayHub;
@@ -104,8 +104,8 @@ export interface BuildAppOptions {
   flistApiClient?: FlistApiClient;
   /** Test-only session timing knobs; production always runs policy defaults. */
   sessionTuning?: SessionTuning;
-  /** Test-only clock for the detached-away sweep. */
-  detachedAwayNow?: () => number;
+  /** Test-only clock for the auto-away sweep. */
+  autoAwayNow?: () => number;
   /** Test-only gateway connection knobs; production runs the defaults. */
   gatewayTuning?: GatewayTuning;
   /** Test-only directory cooldown/timeout knobs. */
@@ -121,7 +121,7 @@ export async function buildApp({
   logger = true,
   flistApiClient,
   sessionTuning,
-  detachedAwayNow,
+  autoAwayNow,
   gatewayTuning,
   directoryTuning,
   characterDataBudget,
@@ -328,19 +328,22 @@ export async function buildApp({
     logger: app.log,
   });
   retention.start();
-  const detachedAway = new DetachedAway({
+  const autoAway = new AutoAway({
     db,
     sessions,
     hub,
     logger: app.log,
     disconnectAfterMs: config.DETACHED_DISCONNECT_HOURS * 3_600_000,
-    now: process.env.NODE_ENV === "test" ? detachedAwayNow : undefined,
+    now: process.env.NODE_ENV === "test" ? autoAwayNow : undefined,
   });
   hub.onFirstSubscribe = (identityId) => {
-    detachedAway.onAttach(identityId);
+    autoAway.onAttach(identityId);
   };
-  detachedAway.start();
-  app.decorate("detachedAway", detachedAway);
+  hub.onActivity = (identityId) => {
+    autoAway.noteActivity(identityId);
+  };
+  autoAway.start();
+  app.decorate("autoAway", autoAway);
   app.decorate("imagePreviewHosts", imagePreviewHosts);
   app.decorate("gatewayHub", hub);
   const sessionJanitor = new SessionJanitor({ db, logger: app.log });
@@ -377,7 +380,7 @@ export async function buildApp({
     sessions.stopAll();
     updates.stop();
     sessionJanitor.stop();
-    detachedAway.stop();
+    autoAway.stop();
     retention.stop();
     seenMembers.stop();
     // Awaited: the outbox's stop() isn't a timer-clear — it waits out the
@@ -599,7 +602,7 @@ export async function buildApp({
     vault,
     sessions,
     history,
-    detachedAway,
+    autoAway,
     logger: app.log,
     disconnectAfterMs: config.DETACHED_DISCONNECT_HOURS * 3_600_000,
   }).catch((error: unknown) => {

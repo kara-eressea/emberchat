@@ -1,8 +1,13 @@
-// Away & logs pane (COMPONENTS.md §12, M5 step 7): client idle auto-away
-// (threshold, custom away message, clear-on-return), the opt-in server-side
-// detached auto-away (decisions.md §10), and chat-log export — which also
-// satisfies the developer-policy requirement that the log location is known
-// and accessible to the user.
+// Away & logs pane (COMPONENTS.md §12, M5 step 7): idle auto-away (threshold,
+// custom away message, clear-on-return), the opt-in detached auto-away
+// (decisions.md §10), and chat-log export — which also satisfies the
+// developer-policy requirement that the log location is known and accessible
+// to the user.
+//
+// Both away modes are decided by the bouncer from activity pooled across every
+// attached device (#619), so the copy says "devices", not "this browser": the
+// preference genuinely applies to the identity rather than to whichever tab
+// happens to be showing this pane.
 
 import { useState } from "react";
 import { APP_NAME, PREFS_DEFAULTS } from "@emberchat/protocol";
@@ -68,7 +73,7 @@ export function AwayLogsPane({ identityId }: { identityId: string }) {
       <GroupLabel>Auto-away</GroupLabel>
       <FieldRow
         label="Away when idle"
-        help="Set your status to away after inactivity in this browser"
+        help="Set your status to away once every device you have open has gone quiet"
       >
         <Toggle
           label="Away when idle"
@@ -112,7 +117,7 @@ export function AwayLogsPane({ identityId }: { identityId: string }) {
       </FieldRow>
       <FieldRow
         label="Clear on return"
-        help="Restore your previous status when activity resumes"
+        help="Restore your previous status when you're active on any device"
       >
         <Toggle
           label="Clear on return"

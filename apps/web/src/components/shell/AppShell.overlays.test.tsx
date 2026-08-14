@@ -38,6 +38,7 @@ vi.mock("../../gateway/socket.js", () => ({
     cmd: vi.fn(() => Promise.resolve({ ok: true })),
     readAck: vi.fn(),
     markReadToLatest: vi.fn(),
+    activity: vi.fn(),
   },
 }));
 

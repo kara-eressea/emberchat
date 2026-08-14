@@ -262,7 +262,7 @@ open item was extracted and filed:
 | #616 fchat-session STA-restore reconnect flaked once under CI load | M11 audit |
 | #617 concurrent local E2E runs need the port override chosen by hand | post-step-9 audit |
 | #618 the mobile action sheet does not read `--eb-keyboard-inset` | MP2 package-D audit |
-| #619 cross-device auto-away framing — **needs a decision** | M9 audit |
+| #619 cross-device auto-away framing — decided, see `decisions.md` §10 | M9 audit |
 | #620 ☆ Favourite channels — design pass before any code | spec'd, never built |
 | #621 register the domain (gates public launch) | naming work |
 
